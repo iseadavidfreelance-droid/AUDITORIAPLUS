@@ -1,0 +1,97 @@
+@import "tailwindcss";
+
+@theme {
+  /* Paleta Oficial AUDITORIAPLUS+ */
+  --color-navy: #0F172A;
+  --color-navy-deep: #263988;
+  --color-blue-primary: #2563EB;
+  --color-emerald-cta: #009045;
+
+  /* Estados de Inventario y Auditoría */
+  --color-state-warning: #D97706;
+  --color-state-warning-bg: #FEF3C7;
+  --color-state-warning-border: #F59E0B;
+  
+  --color-state-success: #16A34A;
+  --color-state-success-bg: #DCFCE7;
+  
+  --color-state-danger: #DC2626;
+  --color-state-danger-bg: #FEE2E2;
+
+  --color-surface-muted: #F3F4F6;
+  --color-surface-card: #FFFFFF;
+  --color-text-main: #0F172A;
+  --color-text-muted: #64748B;
+}
+
+:root {
+  --app-header-height: 64px;
+  --app-tabs-height: 56px;
+  --touch-target-min: 48px;
+}
+
+/* Ergonomía táctil para colectores de datos (Honeywell, Zebra, Smartphones industriales) */
+html, body {
+  margin: 0;
+  padding: 0;
+  background-color: #F8FAFC;
+  color: #0F172A;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  touch-action: manipulation;
+  user-select: none;
+  overscroll-behavior-y: none;
+}
+
+/* Botones y controles para terminales de almacén: mínimo 48px con alto contraste */
+.btn-collector {
+  min-height: 48px;
+  min-width: 48px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.75rem 1.25rem;
+  font-size: 1rem;
+  font-weight: 700;
+  border-radius: 0.5rem;
+  transition: background-color 0.15s ease, transform 0.05s ease;
+  touch-action: manipulation;
+}
+
+.btn-collector:active {
+  transform: scale(0.98);
+}
+
+/* Tipografía de alta legibilidad para SKUs y códigos de barra */
+.font-barcode {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  letter-spacing: 0.05em;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Indicadores de estado de alta visibilidad para piso y galpón */
+.badge-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.25rem 0.75rem;
+  border-radius: 9999px;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.025em;
+}
+
+/* Scroll suave para listas de inventario */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: #F1F5F9;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #CBD5E1;
+  border-radius: 3px;
+}
