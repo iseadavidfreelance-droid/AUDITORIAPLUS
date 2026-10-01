@@ -3,6 +3,7 @@
  * Ergonomía táctil para terminales industriales (Honeywell, Zebra, Smartphones)
  * Mínimo 48px - 56px por botón, contraste extremo, modo offline garantizado.
  * Integración de Escáner Óptico de Cámara HTML5 con retícula verde y flash toggle.
+ * FASE 1: Inyección de Estadísticas en Tiempo Real.
  */
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
@@ -38,8 +39,9 @@ const VIEWPORT_ID = 'barcode-scanner-viewport';
 export const TabCollector: React.FC<TabCollectorProps> = ({ onNavigateToFloor }) => {
   const isOnline = useOnlineStatus();
 
-  // Stores (sin modificar estructura existente)
+  // Stores (Mantenemos estructura intacta, añadiendo extracción de activeMission para Stats)
   const {
+    activeMission,
     activeMissionId,
     activeTask,
     tasks,
@@ -75,6 +77,13 @@ export const TabCollector: React.FC<TabCollectorProps> = ({ onNavigateToFloor })
   const html5QrCodeRef = useRef<Html5Qrcode | null>(null);
   const lastScanTimeRef = useRef<number>(0);
   const lastScannedCodeRef = useRef<string>('');
+
+  // VARIABLES DE ESTADÍSTICAS EN VIVO
+  const totalSkus = activeMission?.totalSkus || 0;
+  const countedSkus = activeMission?.countedSkus || 0;
+  const discrepantSkus = activeMission?.discrepantSkus || 0;
+  const pendingSkus = activeMission?.pendingSkus || 0;
+  const progressPct = totalSkus > 0 ? Math.round((countedSkus / totalSkus) * 100) : 0;
 
   // Auto-enfocar el campo de escaneo manual al montar el componente
   useEffect(() => {
@@ -126,7 +135,7 @@ export const TabCollector: React.FC<TabCollectorProps> = ({ onNavigateToFloor })
         scannerInputRef.current?.select();
       } else {
         showToastBanner(
-          `SKU ${task.SkuCode} ${origin === 'camera' ? 'escaneado por cámara' : 'cargado'}`,
+          `SKU ${task.SkuCode || task.skuCode} ${origin === 'camera' ? 'escaneado por cámara' : 'cargado'}`,
           'success'
         );
       }
@@ -164,8 +173,6 @@ export const TabCollector: React.FC<TabCollectorProps> = ({ onNavigateToFloor })
       setIsCameraStarting(true);
 
       // 3. FIX CRÍTICO: Pausa de 50ms para obligar a React a pintar el DOM visible
-      // Si Html5Qrcode mide el contenedor mientras está "hidden" (display: none),
-      // el tamaño será 0x0 y la pantalla quedará en negro aunque el hardware encienda.
       await new Promise((resolve) => setTimeout(resolve, 50));
 
       const qrScanner = new Html5Qrcode(VIEWPORT_ID, false);
@@ -280,9 +287,16 @@ export const TabCollector: React.FC<TabCollectorProps> = ({ onNavigateToFloor })
       const existingCount =
         activeTask.CountedQuantity !== null && activeTask.CountedQuantity !== undefined
           ? String(activeTask.CountedQuantity)
+          : activeTask.countedQuantity !== null && activeTask.countedQuantity !== undefined
+          ? String(activeTask.countedQuantity)
           : '';
+          
+      const existingSales = activeTask.SalesDuringAudit !== undefined 
+          ? String(activeTask.SalesDuringAudit) 
+          : String(activeTask.salesDuringAudit || 0);
+          
       setCountedInput(existingCount);
-      setSalesInput(String(activeTask.SalesDuringAudit || 0));
+      setSalesInput(existingSales);
 
       // Enfocar directamente el campo de conteo físico para agilizar operación
       setTimeout(() => {
@@ -309,7 +323,7 @@ export const TabCollector: React.FC<TabCollectorProps> = ({ onNavigateToFloor })
   };
 
   // Cálculos en tiempo real del modelo teórico
-  const systemQty = Number(activeTask?.SystemQuantity ?? 0);
+  const systemQty = Number(activeTask?.SystemQuantity ?? activeTask?.systemQuantity ?? 0);
   const salesQty = parseFloat(salesInput) || 0;
   const adjustedTheoretical = systemQty - salesQty;
   const countedQty = parseFloat(countedInput);
@@ -330,37 +344,40 @@ export const TabCollector: React.FC<TabCollectorProps> = ({ onNavigateToFloor })
     setIsSubmitting(true);
     const discrepancy = Number((countedQty - adjustedTheoretical).toFixed(2));
     const taskStatus = discrepancy === 0 ? 'COMPLETED_MATCH' : 'DISCREPANT';
+    const skuCodeToUse = activeTask.SkuCode || activeTask.skuCode;
+    const missionIdToUse = activeMissionId || activeTask.MissionId || activeTask.missionId;
+    const taskIdToUse = activeTask.TaskId || activeTask.taskId;
+    const depositCodeToUse = activeTask.DepositCode || activeTask.depositCode || '150101';
+    const skuDescToUse = activeTask.SkuDescription || activeTask.skuDescription;
 
     // 1. Actualización optimista local en memoria sin congelar UI
-    updateTaskCountLocally(activeTask.SkuCode, countedQty, salesQty, discrepancy, taskStatus);
+    updateTaskCountLocally(skuCodeToUse, countedQty, salesQty, discrepancy, taskStatus);
 
     // 2. Si se detecta discrepancia, registrar en cola de piso
     if (discrepancy !== 0) {
       const discItem: FloorDiscrepancy = {
-        DiscrepancyId: crypto.randomUUID ? crypto.randomUUID() : `disc_${Date.now()}`,
-        TaskId: activeTask.TaskId,
-        MissionId: activeMissionId || activeTask.MissionId,
-        SkuCode: activeTask.SkuCode,
-        SkuDescription: activeTask.SkuDescription,
-        MissingQuantity: discrepancy,
-        OriginDeposit: activeTask.DepositCode || '150101',
-        FloorDeposit: '150103',
-        WarehouseDiscrepancy: discrepancy,
-        FloorSystemQuantity: 0,
-        FloorCountedQuantity: null,
-        FloorDiscrepancy: null,
-        Status: 'PENDING_FLOOR_COUNT',
-        ResolvedAt: null,
+        discrepancyId: crypto.randomUUID ? crypto.randomUUID() : `disc_${Date.now()}`,
+        taskId: taskIdToUse,
+        missionId: missionIdToUse,
+        skuCode: skuCodeToUse,
+        skuDescription: skuDescToUse,
+        warehouseDiscrepancy: discrepancy,
+        originDeposit: depositCodeToUse as any,
+        floorDeposit: '150103',
+        floorSystemQuantity: 0,
+        floorCountedQuantity: null,
+        floorDiscrepancy: null,
+        status: 'PENDING_FLOOR_COUNT',
       };
       addDiscrepancy(discItem);
     }
 
     // 3. Payload oficial
     const payload = {
-      mission_id: activeMissionId || activeTask.MissionId,
-      task_id: activeTask.TaskId,
-      deposit_code: activeTask.DepositCode || '150101',
-      sku_code: activeTask.SkuCode,
+      mission_id: missionIdToUse,
+      task_id: taskIdToUse,
+      deposit_code: depositCodeToUse,
+      sku_code: skuCodeToUse,
       counted_quantity: countedQty,
       sales_during_audit: salesQty,
     };
@@ -383,16 +400,16 @@ export const TabCollector: React.FC<TabCollectorProps> = ({ onNavigateToFloor })
               Status: taskStatus,
               UpdatedAt: new Date().toISOString(),
             })
-            .eq('TaskId', activeTask.TaskId);
+            .eq('TaskId', taskIdToUse);
 
           if (discrepancy !== 0) {
             await supabase.from('Read_Floor_Discrepancies').insert({
-              MissionId: activeMissionId || activeTask.MissionId,
-              TaskId: activeTask.TaskId,
-              OriginDeposit: activeTask.DepositCode || '150101',
+              MissionId: missionIdToUse,
+              TaskId: taskIdToUse,
+              OriginDeposit: depositCodeToUse,
               FloorDeposit: '150103',
-              SkuCode: activeTask.SkuCode,
-              SkuDescription: activeTask.SkuDescription,
+              SkuCode: skuCodeToUse,
+              SkuDescription: skuDescToUse,
               WarehouseDiscrepancy: discrepancy,
               Status: 'PENDING_FLOOR_COUNT',
             });
@@ -401,8 +418,8 @@ export const TabCollector: React.FC<TabCollectorProps> = ({ onNavigateToFloor })
       } else {
         await enqueueOfflineEvent({
           type: 'register-count',
-          missionId: activeMissionId || activeTask.MissionId,
-          taskId: activeTask.TaskId,
+          missionId: missionIdToUse,
+          taskId: taskIdToUse,
           payload,
         });
       }
@@ -410,8 +427,8 @@ export const TabCollector: React.FC<TabCollectorProps> = ({ onNavigateToFloor })
       console.warn('[TabCollector] Error de red al registrar conteo, encolando offline:', err);
       await enqueueOfflineEvent({
         type: 'register-count',
-        missionId: activeMissionId || activeTask.MissionId,
-        taskId: activeTask.TaskId,
+        missionId: missionIdToUse,
+        taskId: taskIdToUse,
         payload,
       });
     } finally {
@@ -568,6 +585,51 @@ export const TabCollector: React.FC<TabCollectorProps> = ({ onNavigateToFloor })
           </div>
         )}
 
+        {/* ============================================================ */}
+        {/* PANEL DE ESTADÍSTICAS EN TIEMPO REAL (NUEVO FASE 1)          */}
+        {/* ============================================================ */}
+        {totalSkus > 0 && (
+          <div className="bg-slate-900/80 p-3 sm:p-4 rounded-xl border border-slate-700/80 shadow-inner space-y-2.5 my-3 animate-fadeIn">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] sm:text-xs font-black text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
+                <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
+                Progreso del Conteo
+              </span>
+              <span className="text-xs sm:text-sm font-mono font-black text-emerald-400">
+                {countedSkus} / {totalSkus} SKUs ({progressPct}%)
+              </span>
+            </div>
+
+            {/* Barra Visual de Progreso */}
+            <div className="w-full bg-slate-800 h-2 sm:h-2.5 rounded-full overflow-hidden">
+              <div
+                className="bg-gradient-to-r from-emerald-500 to-[#009045] h-full transition-all duration-500 rounded-full"
+                style={{ width: `${progressPct}%` }}
+              />
+            </div>
+
+            {/* Cuadrícula de Métricas de Alto Contraste */}
+            <div className="grid grid-cols-4 gap-2 pt-1 text-center">
+              <div className="bg-slate-950/60 p-2 rounded-lg border border-slate-800 flex flex-col justify-center">
+                <span className="block text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-wider">Total</span>
+                <span className="block text-base sm:text-lg font-mono font-black text-white">{totalSkus}</span>
+              </div>
+              <div className="bg-emerald-950/40 p-2 rounded-lg border border-emerald-800/40 flex flex-col justify-center">
+                <span className="block text-[9px] sm:text-[10px] font-bold text-emerald-400 uppercase tracking-wider">Contados</span>
+                <span className="block text-base sm:text-lg font-mono font-black text-emerald-300">{countedSkus}</span>
+              </div>
+              <div className="bg-amber-950/40 p-2 rounded-lg border border-amber-800/40 flex flex-col justify-center">
+                <span className="block text-[9px] sm:text-[10px] font-bold text-amber-400 uppercase tracking-wider">Discrep.</span>
+                <span className="block text-base sm:text-lg font-mono font-black text-amber-300">{discrepantSkus}</span>
+              </div>
+              <div className="bg-slate-950/60 p-2 rounded-lg border border-slate-800 flex flex-col justify-center">
+                <span className="block text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-wider">Faltan</span>
+                <span className="block text-base sm:text-lg font-mono font-black text-slate-200">{pendingSkus}</span>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* INPUT HÍBRIDO PERMANENTE (Plan B con autoFocus habilitado) */}
         <form onSubmit={handleBarcodeSubmit} className="flex gap-2">
           <div className="relative flex-1">
@@ -580,7 +642,7 @@ export const TabCollector: React.FC<TabCollectorProps> = ({ onNavigateToFloor })
               autoFocus
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Escanear con lector láser o ingresar SKU manual (ej: 42419)..."
+              placeholder="Escanear o ingresar SKU manual..."
               className="w-full h-14 pl-11 pr-10 bg-slate-900 border-2 border-slate-700 focus:border-[#009045] rounded-xl text-white font-mono text-lg font-bold placeholder:text-slate-500 focus:outline-hidden"
             />
             {searchTerm && (
@@ -626,24 +688,24 @@ export const TabCollector: React.FC<TabCollectorProps> = ({ onNavigateToFloor })
             <div>
               <div className="flex flex-wrap items-center gap-2">
                 <span className="text-xs font-mono font-black bg-blue-950 text-blue-300 px-3 py-1 rounded-lg border border-blue-800">
-                  SKU: {activeTask.SkuCode}
+                  SKU: {activeTask.SkuCode || activeTask.skuCode}
                 </span>
                 <span className="text-xs font-semibold text-slate-400">
-                  Depósito {activeTask.DepositCode || '150101'}
+                  Depósito {activeTask.DepositCode || activeTask.depositCode || '150101'}
                 </span>
                 <span className="text-xs font-semibold text-slate-400">
-                  Costo: ${Number(activeTask.Cost || 0).toFixed(2)}
+                  Costo: ${Number(activeTask.Cost || activeTask.cost || 0).toFixed(2)}
                 </span>
               </div>
               <h2 className="text-xl sm:text-2xl font-black text-white mt-1.5 tracking-tight">
-                {activeTask.SkuDescription}
+                {activeTask.SkuDescription || activeTask.skuDescription}
               </h2>
 
               {/* Lista de Códigos de Barra asociados */}
-              {activeTask.Barcodes && activeTask.Barcodes.length > 0 && (
+              {(activeTask.Barcodes || activeTask.barcodes) && (activeTask.Barcodes || activeTask.barcodes).length > 0 && (
                 <div className="flex items-center gap-2 mt-2 flex-wrap">
                   <span className="text-[11px] text-slate-400 font-semibold uppercase">EAN/UPC:</span>
-                  {activeTask.Barcodes.map((bc, idx) => (
+                  {(activeTask.Barcodes || activeTask.barcodes).map((bc: string, idx: number) => (
                     <span
                       key={idx}
                       className="text-xs font-mono bg-slate-900 text-slate-300 px-2 py-0.5 rounded border border-slate-700"
@@ -847,7 +909,7 @@ export const TabCollector: React.FC<TabCollectorProps> = ({ onNavigateToFloor })
               </span>
               <div className="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto custom-scrollbar">
                 {tasks
-                  .filter((t) => t.CountedQuantity === null || t.CountedQuantity === undefined)
+                  .filter((t) => t.CountedQuantity === null && t.countedQuantity === null && t.countedQuantity === undefined)
                   .slice(0, 8)
                   .map((t) => (
                     <button

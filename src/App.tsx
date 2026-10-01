@@ -2,13 +2,13 @@
  * AUDITORIAPLUS+ - PWA de Auditoría de Inventario Físico
  * Layout Principal PWA: Barra Superior de Control, Bottom Navigation Dock y Flujo CQRS.
  * Cero datos mock. Modo offline transparente con IndexedDB (AuditDB) y sincronización automática.
+ * FASE 1: Login Modo Quiosco (1 Clic) + Control de Roles Estricto.
  */
 
-import React, { useEffect, useState, useRef, useTransition } from 'react';
+import React, { useEffect, useState, useTransition } from 'react';
 import {
   UploadCloud,
   Barcode,
-  Layers,
   AlertTriangle,
   FileText,
   Wifi,
@@ -16,11 +16,14 @@ import {
   RefreshCw,
   CheckCircle2,
   AlertCircle,
-  Database,
-  ArrowRight,
+  ChevronRight,
+  LogOut,
+  User,
+  Fingerprint,
   ShieldCheck,
-  ChevronRight
+  ArrowRight
 } from 'lucide-react';
+import { Session } from '@supabase/supabase-js';
 import { supabase, isSupabaseConfigured, checkSupabaseConnection } from './lib/supabase';
 import { useMissionStore } from './store/useMissionStore';
 import { useDiscrepancyStore } from './stores/useDiscrepancyStore';
@@ -35,9 +38,23 @@ import { processOfflineQueue, subscribeToSync } from './lib/sync';
 
 type ActiveTab = 'ingestion' | 'mission' | 'discrepancies' | 'reports';
 
+// DEFINICIÓN ESTÁTICA DE USUARIOS DEL QUIOSCO
+const KIOSK_USERS = [
+  { name: 'David', email: 'david@maraplus.local', pass: '123456', icon: ShieldCheck, color: 'text-blue-400', bg: 'bg-blue-500/10' },
+  { name: 'Franyelin', email: 'franyelin@maraplus.local', pass: '123456', icon: User, color: 'text-emerald-400', bg: 'bg-emerald-500/10' },
+  { name: 'Luis', email: 'luis@maraplus.local', pass: '123456', icon: User, color: 'text-amber-400', bg: 'bg-amber-500/10' }
+];
+
 export default function App() {
+  // ESTADOS DE AUTENTICACIÓN
+  const [session, setSession] = useState<Session | null>(null);
+  const [userRole, setUserRole] = useState<'admin' | 'auditor' | null>(null);
+  const [isCheckingAuth, setIsCheckingAuth] = useState(true);
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
+  const [loginError, setLoginError] = useState<string | null>(null);
+
   const isOnline = useOnlineStatus();
-  const [activeTab, setActiveTab] = useState<ActiveTab>('ingestion');
+  const [activeTab, setActiveTab] = useState<ActiveTab>('mission');
   const [, startTransition] = useTransition();
 
   // Stores
@@ -68,8 +85,53 @@ export default function App() {
     type: 'success' | 'warning' | 'error';
   } | null>(null);
 
+  // Consultar Rol Oficial en la Base de Datos
+  const fetchUserRole = async (userId: string) => {
+    try {
+      const { data } = await supabase
+        .from('Read_Users_Gamification')
+        .select('Role')
+        .eq('UserId', userId)
+        .single();
+      
+      const role = data?.Role || 'auditor';
+      setUserRole(role);
+      // Ruteo automático: Admin va a Ingesta, Auditor va a Almacén
+      setActiveTab(role === 'admin' ? 'ingestion' : 'mission'); 
+    } catch (err) {
+      console.error("Error obteniendo rol", err);
+      setUserRole('auditor');
+      setActiveTab('mission');
+    }
+  };
+
+  // Verificación de Sesión Inicial
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      if (session?.user) {
+        fetchUserRole(session.user.id).then(() => setIsCheckingAuth(false));
+      } else {
+        setIsCheckingAuth(false);
+      }
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+      if (session?.user) {
+        fetchUserRole(session.user.id).then(() => setIsCheckingAuth(false));
+      } else {
+        setUserRole(null);
+        setIsCheckingAuth(false);
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
   // 1. Verificación de Conectividad periódica y escucha de eventos de la cola offline
   const refreshConnectionAndQueue = async () => {
+    if (!session) return;
     const status = await checkSupabaseConnection();
     setDbStatus(status);
     const count = await getOfflineQueueCount();
@@ -77,6 +139,7 @@ export default function App() {
   };
 
   useEffect(() => {
+    if (!session) return;
     refreshConnectionAndQueue();
     const interval = setInterval(refreshConnectionAndQueue, 15000);
 
@@ -95,10 +158,11 @@ export default function App() {
       clearInterval(interval);
       unsubscribeSync();
     };
-  }, [activeMissionId, fetchMissionTasks]);
+  }, [activeMissionId, fetchMissionTasks, session]);
 
   // 2. Listener global para el evento `online` del navegador
   useEffect(() => {
+    if (!session) return;
     const handleOnline = async () => {
       console.log('[PWA] Conexión a Internet restablecida. Procesando cola offline...');
       showToast('Conexión reestablecida. Sincronizando eventos pendientes...', 'success');
@@ -119,7 +183,7 @@ export default function App() {
 
     window.addEventListener('online', handleOnline);
     return () => window.removeEventListener('online', handleOnline);
-  }, [activeMissionId, fetchMissionTasks]);
+  }, [activeMissionId, fetchMissionTasks, session]);
 
   // 3. Forzar sincronización manual desde la barra superior
   const handleManualSync = async () => {
@@ -152,6 +216,72 @@ export default function App() {
     setTimeout(() => setToastMessage(null), 4000);
   };
 
+  // LOGIN MODO QUIOSCO (1 Clic)
+  const handleQuickLogin = async (email: string, pass: string) => {
+    setIsLoggingIn(true);
+    setLoginError(null);
+    const { error } = await supabase.auth.signInWithPassword({ email, password: pass });
+    if (error) setLoginError('Error de acceso. Verifique los usuarios en Supabase.');
+    setIsLoggingIn(false);
+  };
+
+  // PANTALLA DE CARGA GLOBAL
+  if (isCheckingAuth) {
+    return (
+      <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center space-y-4">
+        <RefreshCw className="w-8 h-8 text-emerald-500 animate-spin" />
+      </div>
+    );
+  }
+
+  // ============================================================ 
+  // PANTALLA DE LOGIN MODO QUIOSCO (SIN SESIÓN)
+  // ============================================================ 
+  if (!session) {
+    return (
+      <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center p-4 selection:bg-emerald-600 selection:text-white">
+        <div className="w-full max-w-md bg-slate-900/50 border border-slate-800 rounded-2xl p-8 shadow-2xl relative overflow-hidden">
+          <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-emerald-500 to-[#009045]" />
+          
+          <div className="flex flex-col items-center mb-8">
+            <div className="w-16 h-16 rounded-2xl bg-[#009045]/20 flex items-center justify-center mb-4 border border-[#009045]/30">
+               <Fingerprint className="w-8 h-8 text-[#009045]" />
+            </div>
+            <h1 className="text-2xl font-black text-white leading-none">SELECCIONA TU <span className="text-[#009045]">USUARIO</span></h1>
+            <p className="text-slate-400 text-sm mt-2 text-center">Toca tu nombre para acceder al sistema.</p>
+          </div>
+
+          <div className="space-y-3">
+            {KIOSK_USERS.map((u) => (
+              <button
+                key={u.name}
+                onClick={() => handleQuickLogin(u.email, u.pass)}
+                disabled={isLoggingIn}
+                className="w-full flex items-center justify-between p-4 bg-slate-950 border border-slate-800 rounded-xl hover:border-slate-600 transition-all group disabled:opacity-50"
+              >
+                <div className="flex items-center gap-4">
+                  <div className={`w-10 h-10 rounded-lg ${u.bg} flex items-center justify-center`}>
+                    <u.icon className={`w-5 h-5 ${u.color}`} />
+                  </div>
+                  <span className="text-white font-bold text-lg">{u.name}</span>
+                </div>
+                <div className="w-8 h-8 rounded-full bg-slate-800 flex items-center justify-center group-hover:bg-[#009045] transition-colors">
+                  <RefreshCw className={`w-4 h-4 text-white ${isLoggingIn ? 'animate-spin' : 'hidden'}`} />
+                  <ArrowRight className={`w-4 h-4 text-white ${isLoggingIn ? 'hidden' : 'block'}`} />
+                </div>
+              </button>
+            ))}
+          </div>
+
+          {loginError && <div className="mt-4 p-3 bg-rose-950/50 border border-rose-800/80 rounded-lg text-rose-300 text-xs font-medium text-center">{loginError}</div>}
+        </div>
+      </div>
+    );
+  }
+
+  // ============================================================ 
+  // APLICACIÓN PRINCIPAL (CON SESIÓN ACTIVA)
+  // ============================================================ 
   return (
     <div className="min-h-screen bg-slate-900 text-slate-100 flex flex-col font-sans pb-24 antialiased selection:bg-blue-600 selection:text-white">
       {/* ============================================================ */}
@@ -161,7 +291,7 @@ export default function App() {
         <div className="max-w-5xl mx-auto flex items-center justify-between gap-3">
           {/* Logo y Misión Activa */}
           <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-emerald-600 to-blue-600 flex items-center justify-center shadow-md shadow-emerald-900/40 text-white font-black text-sm shrink-0">
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-emerald-600 to-[#009045] flex items-center justify-center shadow-md shadow-emerald-900/40 text-white font-black text-sm shrink-0">
               A+
             </div>
             <div>
@@ -178,27 +308,34 @@ export default function App() {
               <div className="flex items-center gap-1.5 mt-0.5">
                 {activeMissionId ? (
                   <button
-                    onClick={() => setActiveTab('ingestion')}
-                    className="text-[11px] font-mono font-bold text-emerald-400 hover:text-emerald-300 flex items-center gap-1 transition"
+                    onClick={() => userRole === 'admin' && setActiveTab('ingestion')}
+                    className={`text-[11px] font-mono font-bold flex items-center gap-1 transition ${userRole === 'admin' ? 'text-emerald-400 hover:text-emerald-300' : 'text-emerald-400 cursor-default'}`}
                   >
                     <span>Misión: {activeMissionId.slice(0, 8)}</span>
-                    <ChevronRight className="w-3 h-3 text-slate-500" />
+                    {userRole === 'admin' && <ChevronRight className="w-3 h-3 text-slate-500" />}
                   </button>
                 ) : (
                   <button
-                    onClick={() => setActiveTab('ingestion')}
-                    className="text-[11px] font-bold text-amber-400 hover:text-amber-300 flex items-center gap-1"
+                    onClick={() => userRole === 'admin' && setActiveTab('ingestion')}
+                    className={`text-[11px] font-bold flex items-center gap-1 ${userRole === 'admin' ? 'text-amber-400 hover:text-amber-300' : 'text-amber-400 cursor-default'}`}
                   >
                     <span>Seleccionar misión</span>
-                    <ChevronRight className="w-3 h-3 text-amber-500" />
+                    {userRole === 'admin' && <ChevronRight className="w-3 h-3 text-amber-500" />}
                   </button>
                 )}
               </div>
             </div>
           </div>
 
-          {/* Indicadores de Conexión, Eventos en Cola y PWA Install */}
+          {/* Controles de Sesión, Red y Sincronización */}
           <div className="flex items-center gap-2">
+            {/* Info de Usuario y Rol */}
+            <div className="hidden xs:flex items-center gap-1.5 text-xs text-slate-400 bg-slate-800/50 px-2 py-1 rounded-lg">
+              <User className="w-3 h-3" /> 
+              <span className="capitalize font-bold text-white">{session.user.email?.split('@')[0]}</span>
+              <span className="uppercase text-[10px] text-[#009045] ml-1 font-bold">({userRole})</span>
+            </div>
+
             {/* Contador de Eventos Offline en Cola */}
             {queuedEvents > 0 && (
               <button
@@ -209,33 +346,24 @@ export default function App() {
               >
                 <RefreshCw className={`w-3.5 h-3.5 ${isManualSyncing ? 'animate-spin' : ''}`} />
                 <span className="font-mono">{queuedEvents}</span>
-                <span className="hidden sm:inline">en cola</span>
               </button>
             )}
 
             {/* Badge de Conectividad */}
             <div
-              className={`px-2.5 py-1 rounded-xl text-xs font-bold flex items-center gap-1.5 border transition ${
+              className={`px-2 py-1 rounded-xl text-[10px] sm:text-xs font-bold flex items-center gap-1 border transition ${
                 isOnline
                   ? 'bg-emerald-950/70 border-emerald-600/60 text-emerald-300'
                   : 'bg-rose-950/70 border-rose-600/60 text-rose-300 animate-pulse'
               }`}
             >
-              {isOnline ? (
-                <>
-                  <Wifi className="w-3.5 h-3.5 text-emerald-400" />
-                  <span className="hidden xs:inline">En Línea</span>
-                </>
-              ) : (
-                <>
-                  <WifiOff className="w-3.5 h-3.5 text-rose-400" />
-                  <span>Offline</span>
-                </>
-              )}
+              {isOnline ? <Wifi className="w-3.5 h-3.5 text-emerald-400" /> : <WifiOff className="w-3.5 h-3.5 text-rose-400" />}
             </div>
 
-            {/* Botón PWA Install nativo */}
-            <PWAInstallButton />
+            {/* Logout */}
+            <button onClick={async () => await supabase.auth.signOut()} className="p-1.5 text-slate-400 hover:text-rose-400 bg-slate-800 rounded-lg transition" title="Salir">
+              <LogOut className="w-4 h-4" />
+            </button>
           </div>
         </div>
       </header>
@@ -244,46 +372,44 @@ export default function App() {
       {/* 2. CONTENIDO PRINCIPAL SEGÚN TAB ACTIVO                      */}
       {/* ============================================================ */}
       <main className="flex-1 p-3 sm:p-5 max-w-5xl mx-auto w-full space-y-4">
-        {/* TAB 1: INGESTA / MISIONES */}
-        {activeTab === 'ingestion' && (
+        {activeTab === 'ingestion' && userRole === 'admin' && (
           <TabIngestion onMissionSelected={() => setActiveTab('mission')} />
         )}
 
-        {/* TAB 2: COLECTOR ALMACÉN (150101) */}
         {activeTab === 'mission' && (
           <div className="space-y-4">
             <TabCollector onNavigateToFloor={() => setActiveTab('discrepancies')} />
           </div>
         )}
 
-        {/* TAB 3: RECONCILIACIÓN PISO (150103) */}
         {activeTab === 'discrepancies' && (
           <TabFloorReconciliation />
         )}
 
-        {/* TAB 4: REPORTES & ANALÍTICA */}
         {activeTab === 'reports' && (
           <TabReports />
         )}
       </main>
 
       {/* ============================================================ */}
-      {/* 3. PWA BOTTOM NAVIGATION DOCK (4 PESTAÑAS INDUSTRIALES)       */}
+      {/* 3. PWA BOTTOM NAVIGATION DOCK (FILTRO POR ROL)              */}
       {/* ============================================================ */}
       <nav className="fixed bottom-0 left-0 right-0 z-40 bg-slate-900/95 backdrop-blur-lg border-t border-slate-800 shadow-2xl safe-area-bottom">
         <div className="max-w-lg mx-auto flex items-center justify-around px-2 py-1.5">
-          {/* Tab 1: Ingesta / Misiones */}
-          <button
-            onClick={() => setActiveTab('ingestion')}
-            className={`flex-1 flex flex-col items-center justify-center min-h-[56px] py-1 px-1 rounded-xl font-bold text-[11px] transition touch-manipulation active:scale-95 ${
-              activeTab === 'ingestion'
-                ? 'text-blue-400 bg-blue-950/40 border border-blue-500/30'
-                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/40'
-            }`}
-          >
-            <UploadCloud className="w-5 h-5 mb-0.5" />
-            <span>Misiones</span>
-          </button>
+          {/* Tab 1: Ingesta / Misiones (SÓLO ADMIN) */}
+          {userRole === 'admin' && (
+            <button
+              onClick={() => setActiveTab('ingestion')}
+              className={`flex-1 flex flex-col items-center justify-center min-h-[56px] py-1 px-1 rounded-xl font-bold text-[11px] transition touch-manipulation active:scale-95 ${
+                activeTab === 'ingestion'
+                  ? 'text-blue-400 bg-blue-950/40 border border-blue-500/30'
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/40'
+              }`}
+            >
+              <UploadCloud className="w-5 h-5 mb-0.5" />
+              <span>Misiones</span>
+            </button>
+          )}
 
           {/* Tab 2: Colector Almacén (150101) */}
           <button
