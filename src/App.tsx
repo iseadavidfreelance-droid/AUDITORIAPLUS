@@ -2,10 +2,10 @@
  * AUDITORIAPLUS+ - PWA de Auditoría de Inventario Físico
  * Layout Principal PWA: Barra Superior de Control, Bottom Navigation Dock y Flujo CQRS.
  * Cero datos mock. Modo offline transparente con IndexedDB (AuditDB) y sincronización automática.
- * FASE 1: Login Modo Quiosco (1 Clic) + Control de Roles Estricto.
+ * FASE 1.5: Login Modo Quiosco + Control de Roles + Misión Global Persistente.
  */
 
-import React, { useEffect, useState, useTransition } from 'react';
+import React, { useEffect, useState, useTransition, useRef } from 'react';
 import {
   UploadCloud,
   Barcode,
@@ -85,6 +85,9 @@ export default function App() {
     type: 'success' | 'warning' | 'error';
   } | null>(null);
 
+  // NUEVO: Ref para evitar rebotes infinitos al emitir la misión global
+  const lastBroadcastedMissionRef = useRef<string | null>(null);
+
   // Consultar Rol Oficial en la Base de Datos
   const fetchUserRole = async (userId: string) => {
     try {
@@ -136,6 +139,37 @@ export default function App() {
     setDbStatus(status);
     const count = await getOfflineQueueCount();
     setQueuedEvents(count);
+
+    // NUEVO FASE 1.5: OYENTE GLOBAL - Buscar si existe una misión fijada por el administrador
+    if (isOnline) {
+      try {
+        const { data } = await supabase
+          .from('Read_Missions')
+          .select('*')
+          .eq('IsGlobalActive', true)
+          .maybeSingle();
+
+        if (data && data.MissionId !== activeMissionId) {
+          lastBroadcastedMissionRef.current = data.MissionId; // Prevenir auto-rebote
+          setActiveMissionId(data.MissionId);
+          setActiveMission({
+            missionId: data.MissionId,
+            name: data.Name,
+            depositCode: data.DepositCode,
+            totalSkus: data.TotalSkus,
+            countedSkus: data.CountedSkus,
+            pendingSkus: data.PendingSkus,
+            discrepantSkus: data.DiscrepantSkus,
+            reconciledSkus: data.ReconciledSkus,
+            status: data.Status
+          });
+          await fetchMissionTasks(data.MissionId);
+          showToast(`Misión Anclada: ${data.Name}`, 'success');
+        }
+      } catch (err) {
+        console.warn('Error validando misión global', err);
+      }
+    }
   };
 
   useEffect(() => {
@@ -158,7 +192,27 @@ export default function App() {
       clearInterval(interval);
       unsubscribeSync();
     };
-  }, [activeMissionId, fetchMissionTasks, session]);
+  }, [activeMissionId, fetchMissionTasks, session, isOnline]);
+
+  // NUEVO FASE 1.5: TRANSMISOR GLOBAL (Solo Admin)
+  // Cuando el admin selecciona una nueva misión, se inyecta a la BD para anclar a los auditores
+  useEffect(() => {
+    if (userRole === 'admin' && activeMissionId && activeMissionId !== lastBroadcastedMissionRef.current && isOnline) {
+      const broadcastMissionToAll = async () => {
+        lastBroadcastedMissionRef.current = activeMissionId;
+        try {
+          // Desactivar cualquier otra misión
+          await supabase.from('Read_Missions').update({ IsGlobalActive: false }).neq('MissionId', activeMissionId);
+          // Activar la seleccionada
+          await supabase.from('Read_Missions').update({ IsGlobalActive: true }).eq('MissionId', activeMissionId);
+          showToast('Misión anclada para todos los operadores', 'success');
+        } catch (err) {
+          console.error('Error al hacer broadcast de la misión', err);
+        }
+      };
+      broadcastMissionToAll();
+    }
+  }, [activeMissionId, userRole, isOnline]);
 
   // 2. Listener global para el evento `online` del navegador
   useEffect(() => {
@@ -319,7 +373,8 @@ export default function App() {
                     onClick={() => userRole === 'admin' && setActiveTab('ingestion')}
                     className={`text-[11px] font-bold flex items-center gap-1 ${userRole === 'admin' ? 'text-amber-400 hover:text-amber-300' : 'text-amber-400 cursor-default'}`}
                   >
-                    <span>Seleccionar misión</span>
+                    {/* Ajuste visual para el auditor cuando aún no hay misión */}
+                    <span>{userRole === 'admin' ? 'Seleccionar misión' : 'Esperando asignación...'}</span>
                     {userRole === 'admin' && <ChevronRight className="w-3 h-3 text-amber-500" />}
                   </button>
                 )}
