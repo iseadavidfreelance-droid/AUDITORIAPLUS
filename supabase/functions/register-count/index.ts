@@ -65,16 +65,7 @@ Deno.serve(async (req) => {
           EventType: 'DiscrepancyDetected',
           UserId: user_id,
           CorrelationId: crypto.randomUUID(),
-          Payload: {
-            discrepancy_id: crypto.randomUUID(),
-            mission_id,
-            origin_deposit: deposit_code,
-            target_deposit: target_deposit, // Asignación dinámica
-            sku_code,
-            sku_description: "SKU " + sku_code,
-            origin_discrepancy: calculated_discrepancy, // Nombre genérico
-            status: "PENDING_TARGET_COUNT"
-          },
+          discrepancy_id: crypto.randomUUID(),
           Metadata: { trigger: "auto_discrepancy" }
         });
         

@@ -34,11 +34,11 @@ export type TaskStatus = 'PENDING' | 'COMPLETED' | 'COMPLETED_MATCH' | 'DISCREPA
 /**
  * Estados de la discrepancia detectada en Almacén:
  * - OPEN: Abierta, requiere verificación
- * - PENDING_FLOOR_COUNT: Esperando conteo en Piso de Venta (150103)
+ * - PENDING_TARGET_COUNT: Esperando conteo en Piso de Venta (150103)
  * - COUNTED_VALIDATED: Conteo en piso efectuado y validado
  * - RESOLVED: Resuelta y compensada mediante traslado virtual
  */
-export type DiscrepancyStatus = 'OPEN' | 'RESOLVED' | 'PENDING_FLOOR_COUNT' | 'COUNTED_VALIDATED' | 'PENDING_TARGET_COUNT';
+export type DiscrepancyStatus = 'OPEN' | 'RESOLVED' | 'PENDING_TARGET_COUNT' | 'COUNTED_VALIDATED' | 'PENDING_TARGET_COUNT';
 
 /**
  * Métricas acumuladas y financieras de la misión de auditoría
