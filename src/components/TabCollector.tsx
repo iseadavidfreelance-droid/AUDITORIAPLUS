@@ -337,15 +337,16 @@ export const TabCollector: React.FC<TabCollectorProps> = ({ onNavigateToFloor })
       addDiscrepancy(discItem);
     }
 
-    // 3. Payload oficial con USER_ID
+    // 3. Payload oficial con USER_ID y SYSTEM_QUANTITY
     const payload = {
       mission_id: missionIdToUse,
       task_id: taskIdToUse,
       deposit_code: depositCodeToUse,
       sku_code: skuCodeToUse,
       counted_quantity: countedQty,
+      system_quantity: systemQty, // <--- ¡ESTA ERA LA PIEZA FALTANTE!
       sales_during_audit: salesQty,
-      user_id: user.id // <--- INYECTADO AQUÍ (Soluciona el error de red de la Fase 1)
+      user_id: user.id 
     };
 
     // 4. Estrategia de Envío asíncrono

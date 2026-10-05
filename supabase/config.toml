@@ -1,0 +1,2 @@
+[functions.register-count]
+verify_jwt = false
