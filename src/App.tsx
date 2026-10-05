@@ -35,10 +35,12 @@ import { TabFloorReconciliation } from './components/TabFloorReconciliation';
 import { TabReports } from './components/TabReports';
 import { getOfflineQueueCount } from './lib/db';
 import { processOfflineQueue, subscribeToSync } from './lib/sync';
+// NUEVO: Importación del store de autenticación
+import { useAuthStore } from './stores/useAuthStore';
 
 type ActiveTab = 'ingestion' | 'mission' | 'discrepancies' | 'reports';
 
-// DEFINICIÓN ESTÁTICA DE USUARIOS DEL QUIOSCO
+// DEFINICIÓN ESTÁTICA DE USUARIOS DEL QUIOSCO (Actualizado con la contraseña maestra)
 const KIOSK_USERS = [
   { name: 'David', email: 'david@maraplus.local', pass: '123456', icon: ShieldCheck, color: 'text-blue-400', bg: 'bg-blue-500/10' },
   { name: 'Franyelin', email: 'franyelin@maraplus.local', pass: '123456', icon: User, color: 'text-emerald-400', bg: 'bg-emerald-500/10' },
@@ -52,6 +54,9 @@ export default function App() {
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [loginError, setLoginError] = useState<string | null>(null);
+
+  // NUEVO: Instancia del Store de Auth
+  const { setAuth } = useAuthStore();
 
   const isOnline = useOnlineStatus();
   const [activeTab, setActiveTab] = useState<ActiveTab>('mission');
@@ -85,13 +90,13 @@ export default function App() {
     type: 'success' | 'warning' | 'error';
   } | null>(null);
 
-  // NUEVO: Ref para evitar rebotes infinitos al emitir la misión global
+  // Ref para evitar rebotes infinitos al emitir la misión global
   const lastBroadcastedMissionRef = useRef<string | null>(null);
 
-  // NUEVO: Función inteligente para cambiar de pestaña y guardar en memoria local
+  // Función inteligente para cambiar de pestaña y guardar en memoria local
   const changeTab = (tab: ActiveTab) => {
     setActiveTab(tab);
-    localStorage.setItem('auditoria_active_tab', tab); // Guarda la pestaña actual en memoria
+    localStorage.setItem('auditoria_active_tab', tab); 
   };
 
   // Consultar Rol Oficial en la Base de Datos
@@ -106,12 +111,11 @@ export default function App() {
       const role = data?.Role || 'auditor';
       setUserRole(role);
       
-      // NUEVO: Al iniciar o recargar (F5), cargar la pestaña donde el usuario estaba
+      // Al iniciar o recargar (F5), cargar la pestaña donde el usuario estaba
       const savedTab = localStorage.getItem('auditoria_active_tab') as ActiveTab;
       if (savedTab) {
         setActiveTab(savedTab);
       } else {
-        // Fallback original si no hay historial
         changeTab(role === 'admin' ? 'ingestion' : 'mission');
       }
     } catch (err) {
@@ -121,10 +125,11 @@ export default function App() {
     }
   };
 
-  // Verificación de Sesión Inicial
+  // Verificación de Sesión Inicial (Integrado con Zustand)
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
+      setAuth(session?.user || null, session); // GUARDA EN EL STORE GLOBAL
       if (session?.user) {
         fetchUserRole(session.user.id).then(() => setIsCheckingAuth(false));
       } else {
@@ -134,6 +139,7 @@ export default function App() {
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
+      setAuth(session?.user || null, session); // GUARDA EN EL STORE GLOBAL
       if (session?.user) {
         fetchUserRole(session.user.id).then(() => setIsCheckingAuth(false));
       } else {
@@ -143,7 +149,7 @@ export default function App() {
     });
 
     return () => subscription.unsubscribe();
-  }, []);
+  }, [setAuth]);
 
   // 1. Verificación de Conectividad periódica y escucha de eventos de la cola offline
   const refreshConnectionAndQueue = async () => {
@@ -153,7 +159,6 @@ export default function App() {
     const count = await getOfflineQueueCount();
     setQueuedEvents(count);
 
-    // NUEVO FASE 1.5: OYENTE GLOBAL - Buscar si existe una misión fijada por el administrador
     if (isOnline) {
       try {
         const { data } = await supabase
@@ -163,7 +168,7 @@ export default function App() {
           .maybeSingle();
 
         if (data && data.MissionId !== activeMissionId) {
-          lastBroadcastedMissionRef.current = data.MissionId; // Prevenir auto-rebote
+          lastBroadcastedMissionRef.current = data.MissionId;
           setActiveMissionId(data.MissionId);
           setActiveMission({
             missionId: data.MissionId,
@@ -190,7 +195,6 @@ export default function App() {
     refreshConnectionAndQueue();
     const interval = setInterval(refreshConnectionAndQueue, 15000);
 
-    // Escuchar el progreso del sincronizador background
     const unsubscribeSync = subscribeToSync((progress, syncing) => {
       setQueuedEvents(progress.remaining);
       if (progress.processed > 0 && !syncing) {
@@ -207,16 +211,13 @@ export default function App() {
     };
   }, [activeMissionId, fetchMissionTasks, session, isOnline]);
 
-  // NUEVO FASE 1.5: TRANSMISOR GLOBAL (Solo Admin)
-  // Cuando el admin selecciona una nueva misión, se inyecta a la BD para anclar a los auditores
+  // TRANSMISOR GLOBAL (Solo Admin)
   useEffect(() => {
     if (userRole === 'admin' && activeMissionId && activeMissionId !== lastBroadcastedMissionRef.current && isOnline) {
       const broadcastMissionToAll = async () => {
         lastBroadcastedMissionRef.current = activeMissionId;
         try {
-          // Desactivar cualquier otra misión
           await supabase.from('Read_Missions').update({ IsGlobalActive: false }).neq('MissionId', activeMissionId);
-          // Activar la seleccionada
           await supabase.from('Read_Missions').update({ IsGlobalActive: true }).eq('MissionId', activeMissionId);
           showToast('Misión anclada para todos los operadores', 'success');
         } catch (err) {
@@ -292,13 +293,12 @@ export default function App() {
     setIsLoggingIn(false);
   };
 
-  // LOGOUT (Limpia también la memoria de pestañas)
+  // LOGOUT
   const handleLogout = async () => {
     await supabase.auth.signOut();
     localStorage.removeItem('auditoria_active_tab'); 
   };
 
-  // PANTALLA DE CARGA GLOBAL
   if (isCheckingAuth) {
     return (
       <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center space-y-4">
@@ -307,9 +307,7 @@ export default function App() {
     );
   }
 
-  // ============================================================ 
   // PANTALLA DE LOGIN MODO QUIOSCO (SIN SESIÓN)
-  // ============================================================ 
   if (!session) {
     return (
       <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center p-4 selection:bg-emerald-600 selection:text-white">
@@ -352,17 +350,11 @@ export default function App() {
     );
   }
 
-  // ============================================================ 
   // APLICACIÓN PRINCIPAL (CON SESIÓN ACTIVA)
-  // ============================================================ 
   return (
     <div className="min-h-screen bg-slate-900 text-slate-100 flex flex-col font-sans pb-24 antialiased selection:bg-blue-600 selection:text-white">
-      {/* ============================================================ */}
-      {/* 1. BARRA SUPERIOR (HEADER INDUSTRIAL PWA)                    */}
-      {/* ============================================================ */}
       <header className="sticky top-0 z-40 bg-slate-900/95 backdrop-blur-md border-b border-slate-800 px-3 sm:px-5 py-2.5 shadow-lg">
         <div className="max-w-5xl mx-auto flex items-center justify-between gap-3">
-          {/* Logo y Misión Activa */}
           <div className="flex items-center gap-2.5">
             <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-emerald-600 to-[#009045] flex items-center justify-center shadow-md shadow-emerald-900/40 text-white font-black text-sm shrink-0">
               A+
@@ -377,7 +369,6 @@ export default function App() {
                 </span>
               </div>
 
-              {/* Selector / Indicador de Misión Activa */}
               <div className="flex items-center gap-1.5 mt-0.5">
                 {activeMissionId ? (
                   <button
@@ -392,7 +383,6 @@ export default function App() {
                     onClick={() => userRole === 'admin' && changeTab('ingestion')}
                     className={`text-[11px] font-bold flex items-center gap-1 ${userRole === 'admin' ? 'text-amber-400 hover:text-amber-300' : 'text-amber-400 cursor-default'}`}
                   >
-                    {/* Ajuste visual para el auditor cuando aún no hay misión */}
                     <span>{userRole === 'admin' ? 'Seleccionar misión' : 'Esperando asignación...'}</span>
                     {userRole === 'admin' && <ChevronRight className="w-3 h-3 text-amber-500" />}
                   </button>
@@ -401,16 +391,13 @@ export default function App() {
             </div>
           </div>
 
-          {/* Controles de Sesión, Red y Sincronización */}
           <div className="flex items-center gap-2">
-            {/* Info de Usuario y Rol */}
             <div className="hidden xs:flex items-center gap-1.5 text-xs text-slate-400 bg-slate-800/50 px-2 py-1 rounded-lg">
               <User className="w-3 h-3" /> 
               <span className="capitalize font-bold text-white">{session.user.email?.split('@')[0]}</span>
               <span className="uppercase text-[10px] text-[#009045] ml-1 font-bold">({userRole})</span>
             </div>
 
-            {/* Contador de Eventos Offline en Cola */}
             {queuedEvents > 0 && (
               <button
                 onClick={handleManualSync}
@@ -423,7 +410,6 @@ export default function App() {
               </button>
             )}
 
-            {/* Badge de Conectividad */}
             <div
               className={`px-2 py-1 rounded-xl text-[10px] sm:text-xs font-bold flex items-center gap-1 border transition ${
                 isOnline
@@ -434,7 +420,6 @@ export default function App() {
               {isOnline ? <Wifi className="w-3.5 h-3.5 text-emerald-400" /> : <WifiOff className="w-3.5 h-3.5 text-rose-400" />}
             </div>
 
-            {/* Logout */}
             <button onClick={handleLogout} className="p-1.5 text-slate-400 hover:text-rose-400 bg-slate-800 rounded-lg transition" title="Salir">
               <LogOut className="w-4 h-4" />
             </button>
@@ -442,9 +427,6 @@ export default function App() {
         </div>
       </header>
 
-      {/* ============================================================ */}
-      {/* 2. CONTENIDO PRINCIPAL SEGÚN TAB ACTIVO                      */}
-      {/* ============================================================ */}
       <main className="flex-1 p-3 sm:p-5 max-w-5xl mx-auto w-full space-y-4">
         {activeTab === 'ingestion' && userRole === 'admin' && (
           <TabIngestion onMissionSelected={() => changeTab('mission')} />
@@ -465,12 +447,8 @@ export default function App() {
         )}
       </main>
 
-      {/* ============================================================ */}
-      {/* 3. PWA BOTTOM NAVIGATION DOCK (FILTRO POR ROL)              */}
-      {/* ============================================================ */}
       <nav className="fixed bottom-0 left-0 right-0 z-40 bg-slate-900/95 backdrop-blur-lg border-t border-slate-800 shadow-2xl safe-area-bottom">
         <div className="max-w-lg mx-auto flex items-center justify-around px-2 py-1.5">
-          {/* Tab 1: Ingesta / Misiones (SÓLO ADMIN) */}
           {userRole === 'admin' && (
             <button
               onClick={() => changeTab('ingestion')}
@@ -485,7 +463,6 @@ export default function App() {
             </button>
           )}
 
-          {/* Tab 2: Colector Almacén (150101) */}
           <button
             onClick={() => changeTab('mission')}
             className={`flex-1 flex flex-col items-center justify-center min-h-[56px] py-1 px-1 rounded-xl font-bold text-[11px] transition touch-manipulation active:scale-95 ${
@@ -498,7 +475,6 @@ export default function App() {
             <span>Almacén</span>
           </button>
 
-          {/* Tab 3: Reconciliación Piso (150103) */}
           <button
             onClick={() => changeTab('discrepancies')}
             className={`flex-1 flex flex-col items-center justify-center min-h-[56px] py-1 px-1 rounded-xl font-bold text-[11px] transition touch-manipulation relative active:scale-95 ${
@@ -518,7 +494,6 @@ export default function App() {
             <span>Piso (150103)</span>
           </button>
 
-          {/* Tab 4: Reportes */}
           <button
             onClick={() => changeTab('reports')}
             className={`flex-1 flex flex-col items-center justify-center min-h-[56px] py-1 px-1 rounded-xl font-bold text-[11px] transition touch-manipulation active:scale-95 ${
@@ -533,9 +508,6 @@ export default function App() {
         </div>
       </nav>
 
-      {/* ============================================================ */}
-      {/* 4. TOAST FLOTANTE NO BLOQUEANTE                             */}
-      {/* ============================================================ */}
       {toastMessage && (
         <div
           className={`fixed bottom-20 left-1/2 -translate-x-1/2 z-50 px-4 py-3 rounded-2xl shadow-2xl text-xs sm:text-sm font-bold flex items-center gap-2.5 max-w-md w-[90%] border backdrop-blur-md animate-slideUp ${

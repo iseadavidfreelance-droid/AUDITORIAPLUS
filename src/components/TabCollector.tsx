@@ -29,6 +29,8 @@ import { useOnlineStatus } from '../hooks/useOnlineStatus';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import { enqueueOfflineEvent } from '../lib/db';
 import { normalizeSku, FloorDiscrepancy } from '../types/audit';
+// NUEVO: Importación del store de Auth para inyectar el user_id
+import { useAuthStore } from '../stores/useAuthStore';
 
 interface TabCollectorProps {
   onNavigateToFloor?: () => void;
@@ -38,8 +40,10 @@ const VIEWPORT_ID = 'barcode-scanner-viewport';
 
 export const TabCollector: React.FC<TabCollectorProps> = ({ onNavigateToFloor }) => {
   const isOnline = useOnlineStatus();
+  // NUEVO: Extraemos el usuario actual
+  const user = useAuthStore(state => state.user);
 
-  // Stores (Mantenemos estructura intacta, añadiendo extracción de activeMission para Stats)
+  // Stores
   const {
     activeMission,
     activeMissionId,
@@ -71,7 +75,7 @@ export const TabCollector: React.FC<TabCollectorProps> = ({ onNavigateToFloor })
   const [hasTorchCapability, setHasTorchCapability] = useState<boolean>(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
 
-  // Referencias para auto-enfoque en colector y cámara
+  // Referencias
   const scannerInputRef = useRef<HTMLInputElement>(null);
   const countInputRef = useRef<HTMLInputElement>(null);
   const html5QrCodeRef = useRef<Html5Qrcode | null>(null);
@@ -85,12 +89,10 @@ export const TabCollector: React.FC<TabCollectorProps> = ({ onNavigateToFloor })
   const pendingSkus = activeMission?.pendingSkus || 0;
   const progressPct = totalSkus > 0 ? Math.round((countedSkus / totalSkus) * 100) : 0;
 
-  // Auto-enfocar el campo de escaneo manual al montar el componente
   useEffect(() => {
     scannerInputRef.current?.focus();
   }, []);
 
-  // Función pura para normalización estricta LPAD a 6 dígitos
   const applyLpadNormalization = (raw: string): string => {
     const trimmed = (raw || '').trim();
     if (/^\d{1,6}$/.test(trimmed)) {
@@ -99,7 +101,6 @@ export const TabCollector: React.FC<TabCollectorProps> = ({ onNavigateToFloor })
     return normalizeSku(trimmed);
   };
 
-  // Despliegue de Toasts flotantes con colores del sistema (#FEF3C7 para ámbar)
   const showToastBanner = useCallback(
     (text: string, type: 'success' | 'warning' | 'error', discrepancyVal?: number) => {
       setToast({ text, type, discrepancyVal });
@@ -110,15 +111,11 @@ export const TabCollector: React.FC<TabCollectorProps> = ({ onNavigateToFloor })
     []
   );
 
-  // Manejador centralizado de detección de código (Cámara o Entrada Manual)
   const processDetectedCode = useCallback(
     (rawCode: string, origin: 'camera' | 'manual') => {
       if (!rawCode || !rawCode.trim()) return;
-
-      // REGLA OBLIGATORIA: LPAD a 6 dígitos ANTES de consultar el Store
       const normalizedSku = applyLpadNormalization(rawCode);
 
-      // Feedback háptico en smartphones
       if (typeof navigator !== 'undefined' && navigator.vibrate) {
         navigator.vibrate(origin === 'camera' ? 100 : 40);
       }
@@ -127,23 +124,16 @@ export const TabCollector: React.FC<TabCollectorProps> = ({ onNavigateToFloor })
       const task = setActiveTaskBySku(normalizedSku);
 
       if (!task) {
-        showToastBanner(
-          `No se encontró el SKU o código "${normalizedSku}" en esta misión`,
-          'warning'
-        );
+        showToastBanner(`No se encontró el SKU o código "${normalizedSku}" en esta misión`, 'warning');
         scannerInputRef.current?.focus();
         scannerInputRef.current?.select();
       } else {
-        showToastBanner(
-          `SKU ${task.SkuCode || task.skuCode} ${origin === 'camera' ? 'escaneado por cámara' : 'cargado'}`,
-          'success'
-        );
+        showToastBanner(`SKU ${task.SkuCode || task.skuCode} ${origin === 'camera' ? 'escaneado por cámara' : 'cargado'}`, 'success');
       }
     },
     [setActiveTaskBySku, setSearchTerm, showToastBanner]
   );
 
-  // Detener la cámara limpiamente
   const stopCameraScanner = useCallback(async () => {
     if (html5QrCodeRef.current) {
       try {
@@ -161,18 +151,11 @@ export const TabCollector: React.FC<TabCollectorProps> = ({ onNavigateToFloor })
     setIsCameraStarting(false);
   }, []);
 
-  // Iniciar la cámara trasera con html5-qrcode
   const startCameraScanner = useCallback(async () => {
     setCameraError(null);
-
     try {
-      // 1. Limpiar cualquier instancia previa ANTES de declarar el estado de inicio
       await stopCameraScanner();
-
-      // 2. AHORA SÍ, declaramos de forma segura que la cámara está iniciando
       setIsCameraStarting(true);
-
-      // 3. FIX CRÍTICO: Pausa de 50ms para obligar a React a pintar el DOM visible
       await new Promise((resolve) => setTimeout(resolve, 50));
 
       const qrScanner = new Html5Qrcode(VIEWPORT_ID, false);
@@ -194,27 +177,18 @@ export const TabCollector: React.FC<TabCollectorProps> = ({ onNavigateToFloor })
           aspectRatio: 1.777778,
         },
         (decodedText: string) => {
-          // Prevención de ráfagas duplicadas (debounce de 1.2 segundos por código)
           const now = Date.now();
-          if (
-            now - lastScanTimeRef.current < 1200 &&
-            lastScannedCodeRef.current === decodedText
-          ) {
+          if (now - lastScanTimeRef.current < 1200 && lastScannedCodeRef.current === decodedText) {
             return;
           }
           lastScanTimeRef.current = now;
           lastScannedCodeRef.current = decodedText;
-
           processDetectedCode(decodedText, 'camera');
         },
-        (_error) => {
-          // Ignorar errores normales entre cuadros
-        }
+        (_error) => {}
       );
 
       setIsCameraActive(true);
-
-      // Evaluar si el hardware soporta linterna/flash
       try {
         const capabilities = qrScanner.getRunningTrackCapabilities();
         if (capabilities && 'torch' in capabilities) {
@@ -227,10 +201,7 @@ export const TabCollector: React.FC<TabCollectorProps> = ({ onNavigateToFloor })
       }
     } catch (err: unknown) {
       console.warn('[TabCollector] Fallo al iniciar visor de cámara:', err);
-      const errMsg =
-        err instanceof Error
-          ? err.message
-          : 'No se pudo acceder a la cámara. Verifique los permisos del navegador.';
+      const errMsg = err instanceof Error ? err.message : 'No se pudo acceder a la cámara. Verifique los permisos del navegador.';
       setCameraError(errMsg);
       setIsCameraActive(false);
       showToastBanner('No fue posible abrir la cámara. Use el input manual.', 'warning');
@@ -239,14 +210,12 @@ export const TabCollector: React.FC<TabCollectorProps> = ({ onNavigateToFloor })
     }
   }, [processDetectedCode, showToastBanner, stopCameraScanner]);
 
-  // Alternar encendido/apagado de Linterna (Flash)
   const toggleFlashTorch = async () => {
     if (!html5QrCodeRef.current || !isCameraActive) return;
-
     try {
       const nextState = !isTorchOn;
       await html5QrCodeRef.current.applyVideoConstraints({
-        // @ts-expect-error torch is valid in MediaTrackConstraints for supported devices
+        // @ts-expect-error torch is valid
         advanced: [{ torch: nextState }],
       });
       setIsTorchOn(nextState);
@@ -256,7 +225,6 @@ export const TabCollector: React.FC<TabCollectorProps> = ({ onNavigateToFloor })
     }
   };
 
-  // Alternar estado de la cámara (abrir / cerrar)
   const toggleCamera = () => {
     if (isCameraActive || isCameraStarting) {
       stopCameraScanner();
@@ -265,7 +233,6 @@ export const TabCollector: React.FC<TabCollectorProps> = ({ onNavigateToFloor })
     }
   };
 
-  // Limpieza al desmontar componente
   useEffect(() => {
     return () => {
       if (html5QrCodeRef.current) {
@@ -274,31 +241,26 @@ export const TabCollector: React.FC<TabCollectorProps> = ({ onNavigateToFloor })
             html5QrCodeRef.current.stop().catch(() => {});
           }
           html5QrCodeRef.current.clear();
-        } catch {
-          // noop
-        }
+        } catch {}
       }
     };
   }, []);
 
-  // Sincronizar inputs cuando cambia la tarea activa
   useEffect(() => {
     if (activeTask) {
-      const existingCount =
-        activeTask.CountedQuantity !== null && activeTask.CountedQuantity !== undefined
-          ? String(activeTask.CountedQuantity)
-          : activeTask.countedQuantity !== null && activeTask.countedQuantity !== undefined
-          ? String(activeTask.countedQuantity)
-          : '';
+      const existingCount = activeTask.CountedQuantity !== null && activeTask.CountedQuantity !== undefined
+        ? String(activeTask.CountedQuantity)
+        : activeTask.countedQuantity !== null && activeTask.countedQuantity !== undefined
+        ? String(activeTask.countedQuantity)
+        : '';
           
       const existingSales = activeTask.SalesDuringAudit !== undefined 
-          ? String(activeTask.SalesDuringAudit) 
-          : String(activeTask.salesDuringAudit || 0);
+        ? String(activeTask.SalesDuringAudit) 
+        : String(activeTask.salesDuringAudit || 0);
           
       setCountedInput(existingCount);
       setSalesInput(existingSales);
 
-      // Enfocar directamente el campo de conteo físico para agilizar operación
       setTimeout(() => {
         countInputRef.current?.focus();
         countInputRef.current?.select();
@@ -309,20 +271,17 @@ export const TabCollector: React.FC<TabCollectorProps> = ({ onNavigateToFloor })
     }
   }, [activeTask]);
 
-  // Manejador de búsqueda / escaneo manual de SKU con tecla Enter
   const handleBarcodeSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     processDetectedCode(searchTerm, 'manual');
   };
 
-  // Botones de ajuste rápido táctil (+1, +5, +10, -1, reset)
   const adjustCount = (delta: number) => {
     const current = parseFloat(countedInput) || 0;
     const nextVal = Math.max(0, current + delta);
     setCountedInput(String(nextVal));
   };
 
-  // Cálculos en tiempo real del modelo teórico
   const systemQty = Number(activeTask?.SystemQuantity ?? activeTask?.systemQuantity ?? 0);
   const salesQty = parseFloat(salesInput) || 0;
   const adjustedTheoretical = systemQty - salesQty;
@@ -331,9 +290,15 @@ export const TabCollector: React.FC<TabCollectorProps> = ({ onNavigateToFloor })
   const liveDiscrepancy = isCountValid ? countedQty - adjustedTheoretical : 0;
   const isExactMatch = isCountValid && liveDiscrepancy === 0;
 
-  // Registrar conteo físico (Flujo No Bloqueante con estrategia Online / Offline)
+  // NUEVO FLUJO CQRS: Registro Puro sin Mutar la Base de Datos Directamente
   const handleRegisterCount = async () => {
     if (!activeTask) return;
+    
+    // Validamos Sesión
+    if (!user) {
+      showToastBanner('Error: Sesión expirada o no válida. Vuelve a iniciar sesión.', 'error');
+      return;
+    }
 
     if (!isCountValid) {
       showToastBanner('Ingrese una cantidad válida mayor o igual a cero', 'error');
@@ -350,10 +315,10 @@ export const TabCollector: React.FC<TabCollectorProps> = ({ onNavigateToFloor })
     const depositCodeToUse = activeTask.DepositCode || activeTask.depositCode || '150101';
     const skuDescToUse = activeTask.SkuDescription || activeTask.skuDescription;
 
-    // 1. Actualización optimista local en memoria sin congelar UI
+    // 1. Actualización optimista local en memoria (Feedback Instantáneo al Operador)
     updateTaskCountLocally(skuCodeToUse, countedQty, salesQty, discrepancy, taskStatus);
 
-    // 2. Si se detecta discrepancia, registrar en cola de piso
+    // 2. Si se detecta discrepancia, registrar en cola local de piso
     if (discrepancy !== 0) {
       const discItem: FloorDiscrepancy = {
         discrepancyId: crypto.randomUUID ? crypto.randomUUID() : `disc_${Date.now()}`,
@@ -372,7 +337,7 @@ export const TabCollector: React.FC<TabCollectorProps> = ({ onNavigateToFloor })
       addDiscrepancy(discItem);
     }
 
-    // 3. Payload oficial
+    // 3. Payload oficial con USER_ID
     const payload = {
       mission_id: missionIdToUse,
       task_id: taskIdToUse,
@@ -380,40 +345,25 @@ export const TabCollector: React.FC<TabCollectorProps> = ({ onNavigateToFloor })
       sku_code: skuCodeToUse,
       counted_quantity: countedQty,
       sales_during_audit: salesQty,
+      user_id: user.id // <--- INYECTADO AQUÍ (Soluciona el error de red de la Fase 1)
     };
 
     // 4. Estrategia de Envío asíncrono
     try {
       if (isOnline && isSupabaseConfigured) {
+        // SOLUCIÓN CQRS: Llamar a la API. Si falla, encolar. JAMÁS mutar la DB directo.
         const { error } = await supabase.functions.invoke('register-count', {
           body: payload,
         });
 
         if (error) {
-          console.warn('[TabCollector] Edge Function falló, persistiendo en tabla Read_Mission_Tasks:', error);
-          await supabase
-            .from('Read_Mission_Tasks')
-            .update({
-              CountedQuantity: countedQty,
-              SalesDuringAudit: salesQty,
-              Discrepancy: discrepancy,
-              Status: taskStatus,
-              UpdatedAt: new Date().toISOString(),
-            })
-            .eq('TaskId', taskIdToUse);
-
-          if (discrepancy !== 0) {
-            await supabase.from('Read_Floor_Discrepancies').insert({
-              MissionId: missionIdToUse,
-              TaskId: taskIdToUse,
-              OriginDeposit: depositCodeToUse,
-              FloorDeposit: '150103',
-              SkuCode: skuCodeToUse,
-              SkuDescription: skuDescToUse,
-              WarehouseDiscrepancy: discrepancy,
-              Status: 'PENDING_FLOOR_COUNT',
-            });
-          }
+          console.warn('[TabCollector] Edge Function falló, encolando offline:', error);
+          await enqueueOfflineEvent({
+            type: 'register-count',
+            missionId: missionIdToUse,
+            taskId: taskIdToUse,
+            payload,
+          });
         }
       } else {
         await enqueueOfflineEvent({
@@ -434,7 +384,6 @@ export const TabCollector: React.FC<TabCollectorProps> = ({ onNavigateToFloor })
     } finally {
       setIsSubmitting(false);
 
-      // Flujo No Bloqueante: Alerta Ámbar (#FEF3C7) si hay discrepancia avisando que pasó a Piso
       if (discrepancy === 0) {
         showToastBanner(`Conteo exacto registrado (${countedQty} u)`, 'success');
       } else {
@@ -445,7 +394,6 @@ export const TabCollector: React.FC<TabCollectorProps> = ({ onNavigateToFloor })
         );
       }
 
-      // Limpiar instantáneamente el formulario para el siguiente escaneo
       clearActiveTask();
       setCountedInput('');
       setSalesInput('0');
@@ -458,9 +406,7 @@ export const TabCollector: React.FC<TabCollectorProps> = ({ onNavigateToFloor })
 
   return (
     <div className="space-y-4 max-w-4xl mx-auto w-full">
-      {/* 1. VIEWPORT DE CÁMARA Y ENTRADA HÍBRIDA */}
       <div className="bg-slate-800 border-2 border-slate-700 focus-within:border-blue-500 rounded-2xl p-3 sm:p-4 shadow-xl transition space-y-3">
-        {/* Cabecera de Escáner y Conectividad */}
         <div className="flex items-center justify-between">
           <label className="text-xs sm:text-sm font-black text-slate-200 uppercase tracking-wider flex items-center gap-2">
             <Barcode className="w-5 h-5 text-blue-400" />
@@ -477,7 +423,6 @@ export const TabCollector: React.FC<TabCollectorProps> = ({ onNavigateToFloor })
               </span>
             )}
 
-            {/* Botón para Abrir / Cerrar Cámara */}
             <button
               type="button"
               onClick={toggleCamera}
@@ -503,7 +448,6 @@ export const TabCollector: React.FC<TabCollectorProps> = ({ onNavigateToFloor })
           </div>
         </div>
 
-        {/* Viewport Centrado de Cámara con Retícula Verde y Flash Toggle */}
         <div
           className={`relative overflow-hidden rounded-xl bg-black border-2 transition-all ${
             isCameraActive || isCameraStarting
@@ -511,23 +455,19 @@ export const TabCollector: React.FC<TabCollectorProps> = ({ onNavigateToFloor })
               : 'hidden border-slate-700'
           }`}
         >
-          {/* Contenedor del elemento de video montado por html5-qrcode */}
           <div
             id={VIEWPORT_ID}
             className="w-full max-h-[320px] mx-auto bg-black flex items-center justify-center min-h-[220px]"
           />
 
-          {/* Retícula Verde Indicadora de Escaneo */}
           {isCameraActive && (
             <div className="pointer-events-none absolute inset-0 flex items-center justify-center p-4">
               <div className="relative w-64 sm:w-72 h-36 sm:h-44 border-2 border-[#009045] rounded-xl shadow-[0_0_15px_rgba(0,144,69,0.5)]">
-                {/* Esquinas Reforzadas de Retícula Verde */}
                 <span className="absolute -top-1 -left-1 w-4 h-4 border-t-4 border-l-4 border-[#009045]" />
                 <span className="absolute -top-1 -right-1 w-4 h-4 border-t-4 border-r-4 border-[#009045]" />
                 <span className="absolute -bottom-1 -left-1 w-4 h-4 border-b-4 border-l-4 border-[#009045]" />
                 <span className="absolute -bottom-1 -right-1 w-4 h-4 border-b-4 border-r-4 border-[#009045]" />
 
-                {/* Línea Láser Animada de Escaneo */}
                 <div className="w-full h-0.5 bg-[#009045] shadow-[0_0_8px_#009045] absolute top-1/2 -translate-y-1/2 animate-pulse" />
 
                 <div className="absolute bottom-2 inset-x-0 text-center">
@@ -539,7 +479,6 @@ export const TabCollector: React.FC<TabCollectorProps> = ({ onNavigateToFloor })
             </div>
           )}
 
-          {/* Barra de Control Superpuesta en Cámara (Flash Toggle & Cerrar) */}
           {isCameraActive && (
             <div className="absolute top-2 right-2 flex items-center gap-1.5 z-10">
               <button
@@ -566,7 +505,6 @@ export const TabCollector: React.FC<TabCollectorProps> = ({ onNavigateToFloor })
             </div>
           )}
 
-          {/* Indicador de Ayuda del Escáner */}
           {isCameraActive && (
             <div className="bg-slate-900/90 py-1.5 px-3 text-center border-t border-slate-800">
               <p className="text-[11px] text-slate-300 flex items-center justify-center gap-1.5">
@@ -577,7 +515,6 @@ export const TabCollector: React.FC<TabCollectorProps> = ({ onNavigateToFloor })
           )}
         </div>
 
-        {/* Mensaje de Error en Cámara si ocurre */}
         {cameraError && (
           <div className="p-3 bg-rose-950/70 border border-rose-600 rounded-xl text-xs text-rose-200 flex items-center gap-2">
             <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
@@ -585,9 +522,6 @@ export const TabCollector: React.FC<TabCollectorProps> = ({ onNavigateToFloor })
           </div>
         )}
 
-        {/* ============================================================ */}
-        {/* PANEL DE ESTADÍSTICAS EN TIEMPO REAL (NUEVO FASE 1)          */}
-        {/* ============================================================ */}
         {totalSkus > 0 && (
           <div className="bg-slate-900/80 p-3 sm:p-4 rounded-xl border border-slate-700/80 shadow-inner space-y-2.5 my-3 animate-fadeIn">
             <div className="flex items-center justify-between">
@@ -600,7 +534,6 @@ export const TabCollector: React.FC<TabCollectorProps> = ({ onNavigateToFloor })
               </span>
             </div>
 
-            {/* Barra Visual de Progreso */}
             <div className="w-full bg-slate-800 h-2 sm:h-2.5 rounded-full overflow-hidden">
               <div
                 className="bg-gradient-to-r from-emerald-500 to-[#009045] h-full transition-all duration-500 rounded-full"
@@ -608,7 +541,6 @@ export const TabCollector: React.FC<TabCollectorProps> = ({ onNavigateToFloor })
               />
             </div>
 
-            {/* Cuadrícula de Métricas de Alto Contraste */}
             <div className="grid grid-cols-4 gap-2 pt-1 text-center">
               <div className="bg-slate-950/60 p-2 rounded-lg border border-slate-800 flex flex-col justify-center">
                 <span className="block text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-wider">Total</span>
@@ -630,7 +562,6 @@ export const TabCollector: React.FC<TabCollectorProps> = ({ onNavigateToFloor })
           </div>
         )}
 
-        {/* INPUT HÍBRIDO PERMANENTE (Plan B con autoFocus habilitado) */}
         <form onSubmit={handleBarcodeSubmit} className="flex gap-2">
           <div className="relative flex-1">
             <Search className="w-5 h-5 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
@@ -668,7 +599,6 @@ export const TabCollector: React.FC<TabCollectorProps> = ({ onNavigateToFloor })
           </button>
         </form>
 
-        {/* Guía Visual Dinámica de Normalización LPAD (6 Dígitos) */}
         {searchTerm && /^\d{1,5}$/.test(searchTerm.trim()) && (
           <p className="text-xs font-mono text-emerald-400 flex items-center gap-1.5 pl-1">
             <Zap className="w-3.5 h-3.5 text-emerald-400" />
@@ -680,10 +610,8 @@ export const TabCollector: React.FC<TabCollectorProps> = ({ onNavigateToFloor })
         )}
       </div>
 
-      {/* 2. FORMULARIO TÁCTIL DE CONTEO */}
       {activeTask ? (
         <div className="bg-slate-800/95 border-2 border-blue-500/80 rounded-2xl p-4 sm:p-6 shadow-2xl space-y-5 animate-fadeIn">
-          {/* Cabecera del Artículo */}
           <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 pb-4 border-b border-slate-700/80">
             <div>
               <div className="flex flex-wrap items-center gap-2">
@@ -701,7 +629,6 @@ export const TabCollector: React.FC<TabCollectorProps> = ({ onNavigateToFloor })
                 {activeTask.SkuDescription || activeTask.skuDescription}
               </h2>
 
-              {/* Lista de Códigos de Barra asociados */}
               {(activeTask.Barcodes || activeTask.barcodes) && (activeTask.Barcodes || activeTask.barcodes).length > 0 && (
                 <div className="flex items-center gap-2 mt-2 flex-wrap">
                   <span className="text-[11px] text-slate-400 font-semibold uppercase">EAN/UPC:</span>
@@ -726,7 +653,6 @@ export const TabCollector: React.FC<TabCollectorProps> = ({ onNavigateToFloor })
             </button>
           </div>
 
-          {/* Grid de Ecuación Teórica de Inventario (S, V, S - V) */}
           <div className="grid grid-cols-3 gap-2.5 sm:gap-3 bg-slate-950/80 p-3 sm:p-4 rounded-xl border border-slate-700/80 text-center">
             <div className="p-2 bg-slate-900/60 rounded-lg">
               <span className="text-[10px] sm:text-xs text-slate-400 uppercase font-black block tracking-wider">
@@ -759,7 +685,6 @@ export const TabCollector: React.FC<TabCollectorProps> = ({ onNavigateToFloor })
             </div>
           </div>
 
-          {/* Campo Numérico Gigante para "Cantidad Contada Físicamente" */}
           <div className="space-y-2">
             <label className="text-xs sm:text-sm font-black text-slate-200 uppercase tracking-wider flex items-center justify-between">
               <span>CANTIDAD CONTADA FÍSICAMENTE (Qc)</span>
@@ -779,7 +704,6 @@ export const TabCollector: React.FC<TabCollectorProps> = ({ onNavigateToFloor })
               />
             </div>
 
-            {/* Teclado de Incrementos Rápidos Táctiles (Mínimo 48px por botón) */}
             <div className="grid grid-cols-6 gap-2 pt-1">
               <button
                 type="button"
@@ -826,7 +750,6 @@ export const TabCollector: React.FC<TabCollectorProps> = ({ onNavigateToFloor })
             </div>
           </div>
 
-          {/* Campo de Ventas Durante Auditoría */}
           <div>
             <label className="block text-xs font-bold text-slate-300 mb-1.5 flex items-center justify-between">
               <span>VENTAS REGISTRADAS DURANTE LA AUDITORÍA:</span>
@@ -842,7 +765,6 @@ export const TabCollector: React.FC<TabCollectorProps> = ({ onNavigateToFloor })
             />
           </div>
 
-          {/* Banner de Previsualización Dinámica del Resultado */}
           {isCountValid && (
             <div
               className={`p-4 rounded-xl border-2 flex items-center justify-between transition ${
@@ -880,7 +802,6 @@ export const TabCollector: React.FC<TabCollectorProps> = ({ onNavigateToFloor })
             </div>
           )}
 
-          {/* BOTÓN DE GUARDADO RÁPIDO CON COLOR PRINCIPAL (#009045 - Mínimo 58px de alto) */}
           <button
             onClick={handleRegisterCount}
             disabled={!isCountValid || isSubmitting}
@@ -891,7 +812,6 @@ export const TabCollector: React.FC<TabCollectorProps> = ({ onNavigateToFloor })
           </button>
         </div>
       ) : (
-        /* Estado Vacío - Esperando Escaneo */
         <div className="bg-slate-800/40 border-2 border-dashed border-slate-700 rounded-2xl p-8 sm:p-12 text-center text-slate-400 space-y-3">
           <div className="w-16 h-16 rounded-2xl bg-emerald-600/10 border border-emerald-500/20 text-[#009045] flex items-center justify-center mx-auto">
             <Barcode className="w-9 h-9" />
@@ -901,7 +821,6 @@ export const TabCollector: React.FC<TabCollectorProps> = ({ onNavigateToFloor })
             Active el visor de cámara para escanear con la retícula verde o apunte su colector industrial hacia el código de barras.
           </p>
 
-          {/* Acceso Rápido a Tareas Pendientes si existen */}
           {tasks.length > 0 && (
             <div className="pt-4 border-t border-slate-800 text-left max-w-lg mx-auto">
               <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-2">
@@ -926,7 +845,6 @@ export const TabCollector: React.FC<TabCollectorProps> = ({ onNavigateToFloor })
         </div>
       )}
 
-      {/* TOAST FLOTANTE NO BLOQUEANTE (Con color #FEF3C7 en alertas de discrepancia) */}
       {toast && (
         <div
           className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-4 py-3.5 rounded-2xl shadow-2xl text-xs sm:text-sm font-bold flex items-center justify-between gap-3 max-w-md w-[92%] border backdrop-blur-md animate-slideUp ${
