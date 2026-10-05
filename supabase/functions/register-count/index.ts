@@ -1,6 +1,6 @@
 import { createClient } from "npm:@supabase/supabase-js@2.39.3";
 
-console.log("🟢 [1] ISOLATE INICIADO EN DENO 2.1.4");
+console.log("🟢 [1] ISOLATE INICIADO EN DENO 2.1.4 (VERSION BIDIRECCIONAL)");
 
 Deno.serve(async (req) => {
   const origin = req.headers.get('Origin') || '*';
@@ -34,6 +34,9 @@ Deno.serve(async (req) => {
     // Cálculo seguro (Jamás será NaN ni null)
     const calculated_discrepancy = safeCounted - (safeSystem - safeSales);
 
+    // INTELIGENCIA BIDIRECCIONAL: Deducir el destino basado en el origen
+    const target_deposit = deposit_code === '150101' ? '150103' : '150101';
+
     const payloadToInsert = {
       AggregateId: task_id,
       AggregateType: 'MissionTask',
@@ -47,23 +50,18 @@ Deno.serve(async (req) => {
         sales_during_audit: safeSales, 
         calculated_discrepancy
       },
-      Metadata: { client: "PWA_AuditoriaPlus_V5" }
+      Metadata: { client: "PWA_AuditoriaPlus_V6_Agnostic" }
     };
 
-    const { data, error } = await supabaseClient
-      .from('EventStore')
-      .insert(payloadToInsert)
-      .select();
-
+    const { data, error } = await supabaseClient.from('EventStore').insert(payloadToInsert).select();
     if (error) throw new Error(error.message);
-    console.log("✅ [5] INSERCIÓN EXITOSA EN EVENTSTORE:", data);
 
     if (calculated_discrepancy !== 0) {
       const { error: discError } = await supabaseClient
         .from('EventStore')
         .insert({
           AggregateId: task_id,
-          AggregateType: 'FloorDiscrepancy',
+          AggregateType: 'CrossDiscrepancy', // Nuevo tipo agnóstico
           EventType: 'DiscrepancyDetected',
           UserId: user_id,
           CorrelationId: crypto.randomUUID(),
@@ -71,30 +69,24 @@ Deno.serve(async (req) => {
             discrepancy_id: crypto.randomUUID(),
             mission_id,
             origin_deposit: deposit_code,
-            floor_deposit: "150103",
+            target_deposit: target_deposit, // Asignación dinámica
             sku_code,
             sku_description: "SKU " + sku_code,
-            warehouse_discrepancy: calculated_discrepancy,
-            status: "PENDING_FLOOR_COUNT"
+            origin_discrepancy: calculated_discrepancy, // Nombre genérico
+            status: "PENDING_TARGET_COUNT"
           },
           Metadata: { trigger: "auto_discrepancy" }
         });
         
         if (discError) throw new Error(discError.message);
-        console.log("✅ [6] DISCREPANCIA REGISTRADA.");
     }
 
     return new Response(
-      JSON.stringify({
-        status: "success",
-        code: 200,
-        data: { task_id, calculated_discrepancy, status: calculated_discrepancy === 0 ? 'COMPLETED_MATCH' : 'DISCREPANT' }
-      }),
+      JSON.stringify({ status: "success", code: 200, data: { task_id, calculated_discrepancy, status: calculated_discrepancy === 0 ? 'COMPLETED_MATCH' : 'DISCREPANT' } }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 
   } catch (err) {
-    console.error("🔥 [FATAL] CRASH:", err);
     return new Response(
       JSON.stringify({ error: err instanceof Error ? err.message : 'Error desconocido' }),
       { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }

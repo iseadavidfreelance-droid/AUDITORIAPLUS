@@ -318,21 +318,23 @@ export const TabCollector: React.FC<TabCollectorProps> = ({ onNavigateToFloor })
     // 1. Actualización optimista local en memoria (Feedback Instantáneo al Operador)
     updateTaskCountLocally(skuCodeToUse, countedQty, salesQty, discrepancy, taskStatus);
 
-    // 2. Si se detecta discrepancia, registrar en cola local de piso
+    // 2. Si se detecta discrepancia, registrar en cola local de piso (Agnóstico)
     if (discrepancy !== 0) {
+      const targetDepositCode = depositCodeToUse === '150101' ? '150103' : '150101';
+      
       const discItem: FloorDiscrepancy = {
         discrepancyId: crypto.randomUUID ? crypto.randomUUID() : `disc_${Date.now()}`,
-        taskId: taskIdToUse,
+        taskId: taskIdToUse as any,
         missionId: missionIdToUse,
         skuCode: skuCodeToUse,
         skuDescription: skuDescToUse,
-        warehouseDiscrepancy: discrepancy,
+        originDiscrepancy: discrepancy,
         originDeposit: depositCodeToUse as any,
-        floorDeposit: '150103',
-        floorSystemQuantity: 0,
-        floorCountedQuantity: null,
-        floorDiscrepancy: null,
-        status: 'PENDING_FLOOR_COUNT',
+        targetDeposit: targetDepositCode as any,
+        targetSystemQuantity: null,
+        targetCountedQuantity: null,
+        targetDiscrepancy: null,
+        status: 'PENDING_TARGET_COUNT',
       };
       addDiscrepancy(discItem);
     }

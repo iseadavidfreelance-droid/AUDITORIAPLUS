@@ -38,7 +38,7 @@ export type TaskStatus = 'PENDING' | 'COMPLETED' | 'COMPLETED_MATCH' | 'DISCREPA
  * - COUNTED_VALIDATED: Conteo en piso efectuado y validado
  * - RESOLVED: Resuelta y compensada mediante traslado virtual
  */
-export type DiscrepancyStatus = 'OPEN' | 'RESOLVED' | 'PENDING_FLOOR_COUNT' | 'COUNTED_VALIDATED';
+export type DiscrepancyStatus = 'OPEN' | 'RESOLVED' | 'PENDING_FLOOR_COUNT' | 'COUNTED_VALIDATED' | 'PENDING_TARGET_COUNT';
 
 /**
  * Métricas acumuladas y financieras de la misión de auditoría
@@ -98,7 +98,7 @@ export interface MissionTask {
 }
 
 /**
- * Registro de discrepancia en Piso de Venta (Read_Floor_Discrepancies)
+ * Registro de discrepancia bidireccional (Read_Floor_Discrepancies renombrada lógicamente)
  */
 export interface FloorDiscrepancy {
   DiscrepancyId: string;
@@ -106,33 +106,31 @@ export interface FloorDiscrepancy {
   MissionId: string;
   SkuCode: string;
   SkuDescription: string;
-  MissingQuantity: number;
   Status: DiscrepancyStatus;
   ResolvedAt: string | null;
 
-  // Campos adicionales del Read Model CQRS
+  // Campos adicionales del Read Model CQRS (Agnósticos)[cite: 19]
   OriginDeposit?: DepositCode | string;
-  FloorDeposit?: DepositCode | string;
-  WarehouseDiscrepancy?: number;
-  FloorSystemQuantity?: number;
-  FloorCountedQuantity?: number | null;
-  FloorDiscrepancy?: number | null;
+  TargetDeposit?: DepositCode | string;
+  OriginDiscrepancy?: number;
+  TargetSystemQuantity?: number | null;
+  TargetCountedQuantity?: number | null;
+  TargetDiscrepancy?: number | null;
   CreatedAt?: string;
   UpdatedAt?: string;
 
-  // Aliases en camelCase
+  // Aliases en camelCase para interoperabilidad en Zustand[cite: 18]
   discrepancyId?: string;
   taskId?: string;
   missionId?: string;
   skuCode?: string;
   skuDescription?: string;
-  missingQuantity?: number;
   originDeposit?: DepositCode | string;
-  floorDeposit?: DepositCode | string;
-  warehouseDiscrepancy?: number;
-  floorSystemQuantity?: number;
-  floorCountedQuantity?: number | null;
-  floorDiscrepancy?: number | null;
+  targetDeposit?: DepositCode | string;
+  originDiscrepancy?: number;
+  targetSystemQuantity?: number | null;
+  targetCountedQuantity?: number | null;
+  targetDiscrepancy?: number | null;
   status?: DiscrepancyStatus;
   resolvedAt?: string | null;
 }
@@ -177,7 +175,7 @@ export interface EventStoreRecord<TPayload = Record<string, unknown>> {
   SequenceNum?: number;
   EventId: string;
   AggregateId: string;
-  AggregateType: 'Mission' | 'SKU' | 'Inventory' | 'Transfer' | 'User';
+  AggregateType: 'Mission' | 'SKU' | 'Inventory' | 'Transfer' | 'User' | 'CrossDiscrepancy';
   EventType:
     | 'MissionCreated'
     | 'TaskCountRegistered'
@@ -201,7 +199,7 @@ export interface EventStoreRecord<TPayload = Record<string, unknown>> {
 }
 
 /**
- * Payload para registro de conteo en Almacén
+ * Payload para registro de conteo en Almacén o Piso
  * Ecuación: Discrepancia = CountedQuantity - (SystemQuantity - SalesDuringAudit)
  */
 export interface RegisterCountPayload {
@@ -214,7 +212,7 @@ export interface RegisterCountPayload {
 }
 
 /**
- * Payload para registro de conteo en Piso de Venta
+ * Payload para registro de conteo en Destino
  */
 export interface RegisterFloorCountPayload {
   discrepancy_id: string;

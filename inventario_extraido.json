@@ -1,0 +1,1412 @@
+[
+  {
+    "sku": "8362",
+    "success": true,
+    "ms": 805.8013916015625,
+    "nombre": "AZUCAR REFINADA KRYSTAL 1KG",
+    "barras": [
+      "083621",
+      "8435564902842",
+      "8435564906369",
+      "083627",
+      "8435564905744",
+      "083624",
+      "078362",
+      "083626",
+      "7592806136036",
+      "7598252000891",
+      "083625",
+      "7599722000014"
+    ],
+    "depositos": {
+      "150109": 80,
+      "Almacén": 3,
+      "Piso de Venta": 2,
+      "Avería": 14
+    }
+  },
+  {
+    "sku": "14086",
+    "success": true,
+    "ms": 1324.7385025024414,
+    "nombre": "PROT DIAR KOTEX X 15",
+    "barras": [
+      "061513",
+      "067832",
+      "8411114086231",
+      "8411114086255",
+      "059187",
+      "810876033312",
+      "663350086287",
+      "014086",
+      "7702425544932",
+      "8411114086224"
+    ],
+    "depositos": {
+      "Almacén": 0,
+      "Piso de Venta": 0,
+      "Nodo de Tránsito": 0,
+      "150109": 0
+    }
+  },
+  {
+    "sku": "14326",
+    "success": true,
+    "ms": 1330.4147720336914,
+    "nombre": "PROT DIAR CAREFREE X60 S/FRAGANCIA",
+    "barras": [
+      "7702031969341",
+      "770203196341",
+      "014326"
+    ],
+    "depositos": {
+      "Almacén": 42,
+      "Piso de Venta": 4,
+      "Nodo de Tránsito": 0,
+      "Avería": 0
+    }
+  },
+  {
+    "sku": "15654",
+    "success": true,
+    "ms": 1610.9271049499512,
+    "nombre": "PROT DIAR NUBES X 2",
+    "barras": [
+      "7591248330309",
+      "015654"
+    ],
+    "depositos": {
+      "Almacén": 17,
+      "Piso de Venta": 8,
+      "Nodo de Tránsito": 0
+    }
+  },
+  {
+    "sku": "43381",
+    "success": true,
+    "ms": 982.952356338501,
+    "nombre": "PROT DIAR KOTEX MEGA PACK X 5",
+    "barras": [
+      "7702425809765",
+      "7591253009849",
+      "043381"
+    ],
+    "depositos": {
+      "Almacén": 36,
+      "Piso de Venta": 23,
+      "Nodo de Tránsito": 0
+    }
+  },
+  {
+    "sku": "62314",
+    "success": true,
+    "ms": 1095.8027839660645,
+    "nombre": "PROT DIAR ALWAYS DELGADA X 2",
+    "barras": [
+      "062314",
+      "037000426882"
+    ],
+    "depositos": {
+      "Piso de Venta": 19,
+      "Almacén": 6,
+      "Nodo de Tránsito": 0
+    }
+  },
+  {
+    "sku": "71391",
+    "success": true,
+    "ms": 989.2575740814209,
+    "nombre": "PROT DIAR KOTEX ULTRA FLEXIBLE X 15 DISCRETA",
+    "barras": [
+      "071391",
+      "7702425804814"
+    ],
+    "depositos": {
+      "Piso de Venta": 9,
+      "Almacén": 6,
+      "Nodo de Tránsito": 0
+    }
+  },
+  {
+    "sku": "77998",
+    "success": true,
+    "ms": 1006.690263748169,
+    "nombre": "KOTEX PROTECTOR LINER LARGO X 16",
+    "barras": [
+      "050382",
+      "077998",
+      "7702425887855",
+      "8699847071155"
+    ],
+    "depositos": {
+      "Piso de Venta": 0,
+      "Nodo de Tránsito": 0,
+      "Almacén": 0
+    }
+  },
+  {
+    "sku": "77999",
+    "success": true,
+    "ms": 1052.5295734405518,
+    "nombre": "KOTEX PROTECTOR LARGO X 48",
+    "barras": [
+      "7702425712072",
+      "077999",
+      "7591257002273",
+      "000517",
+      "8681308779991"
+    ],
+    "depositos": {
+      "Almacén": 0,
+      "Piso de Venta": 0,
+      "Nodo de Tránsito": 0
+    }
+  },
+  {
+    "sku": "79456",
+    "success": true,
+    "ms": 983.647346496582,
+    "nombre": "PROT CAREFREE 60 CON PERFUME",
+    "barras": [
+      "051077",
+      "736211794567",
+      "9789295055124",
+      "079456",
+      "8543687945698",
+      "059647",
+      "0705632523315",
+      "705632523315",
+      "7702031504474"
+    ],
+    "depositos": {
+      "Piso de Venta": 0,
+      "Almacén": 0,
+      "Nodo de Tránsito": 0,
+      "Avería": 0
+    }
+  },
+  {
+    "sku": "79968",
+    "success": true,
+    "ms": 1043.3709621429443,
+    "nombre": "TOA KOTEX FEM C/ALAS X8 UNID ESENCIAL",
+    "barras": [
+      "7702425152540",
+      "7591039000725",
+      "7996879968790",
+      "079968",
+      "050374"
+    ],
+    "depositos": {
+      "Almacén": 0,
+      "Piso de Venta": 0,
+      "Nodo de Tránsito": 0
+    }
+  },
+  {
+    "sku": "82814",
+    "success": true,
+    "ms": 935.9111785888672,
+    "nombre": "PROT DIAR CAREFREE S/PERFUME X 1",
+    "barras": [
+      "7790010616751",
+      "082814"
+    ],
+    "depositos": {
+      "Almacén": 22,
+      "Piso de Venta": 5
+    }
+  },
+  {
+    "sku": "82815",
+    "success": true,
+    "ms": 936.0311031341553,
+    "nombre": "PROT CAREFREE C/PERFUME X 1",
+    "barras": [
+      "7702031501442",
+      "082815"
+    ],
+    "depositos": {
+      "Almacén": 8,
+      "Piso de Venta": 6,
+      "Nodo de Tránsito": 0
+    }
+  },
+  {
+    "sku": "42416",
+    "success": true,
+    "ms": 1041.182279586792,
+    "nombre": "YOGURT MIGURT SABOR FRESA 125ML",
+    "barras": [
+      "042416",
+      "082095",
+      "7598424165618",
+      "7593922000096"
+    ],
+    "depositos": {
+      "Almacén": 0,
+      "Piso de Venta": 0,
+      "Nodo de Tránsito": 0,
+      "150109": 0,
+      "Galpón": 0,
+      "Avería": 0
+    }
+  },
+  {
+    "sku": "42418",
+    "success": true,
+    "ms": 982.4190139770508,
+    "nombre": "YOGURT MIGURT FRUTA FRESA 125ML.",
+    "barras": [
+      "077493",
+      "7593922000133",
+      "042418",
+      "8424184241844"
+    ],
+    "depositos": {
+      "Piso de Venta": 0,
+      "Almacén": 0,
+      "150109": 0,
+      "Nodo de Tránsito": 0,
+      "Avería": 0
+    }
+  },
+  {
+    "sku": "42419",
+    "success": true,
+    "ms": 1222.6927280426025,
+    "nombre": "YOGURT MIGURT FRUTA DURAZNO 125ML",
+    "barras": [
+      "7593922000140",
+      "042419"
+    ],
+    "depositos": {
+      "Almacén": 48,
+      "Piso de Venta": 11,
+      "Galpón": 0,
+      "Avería": 0,
+      "Nodo de Tránsito": 0
+    }
+  },
+  {
+    "sku": "42853",
+    "success": true,
+    "ms": 968.4278964996338,
+    "nombre": "YOGURT MIGURT FRESA 750ML",
+    "barras": [
+      "7593922000355",
+      "8682241212026",
+      "048645",
+      "042853",
+      "8534285342859"
+    ],
+    "depositos": {
+      "Nodo de Tránsito": 0,
+      "Piso de Venta": 1,
+      "Almacén": 0,
+      "Avería": 0,
+      "Galpón": 0
+    }
+  },
+  {
+    "sku": "42878",
+    "success": true,
+    "ms": 1037.9719734191895,
+    "nombre": "YOGURT MIGURT ORIGINAL 750 ML",
+    "barras": [
+      "7593922001048",
+      "042878"
+    ],
+    "depositos": {
+      "Piso de Venta": 6,
+      "Almacén": 3,
+      "Avería": 0,
+      "Nodo de Tránsito": 0
+    }
+  },
+  {
+    "sku": "81994",
+    "success": true,
+    "ms": 1046.201229095459,
+    "nombre": "YOGURT MIGURT SABOR PIE DE LIMON 125ML",
+    "barras": [
+      "081994",
+      "7593922000874"
+    ],
+    "depositos": {
+      "Almacén": 48,
+      "Piso de Venta": 16,
+      "Nodo de Tránsito": 0,
+      "Avería": 0
+    }
+  },
+  {
+    "sku": "2909",
+    "success": true,
+    "ms": 897.1400260925293,
+    "nombre": "SOL DEXTROSA 5% X  500 ML KMPLUS",
+    "barras": [
+      "KM00070",
+      "6942189211379",
+      "7598176001394",
+      "052909",
+      "75011251137722",
+      "7596273000944",
+      "082909",
+      "062909",
+      "002909"
+    ],
+    "depositos": {
+      "Piso de Venta": 0,
+      "Almacén": 0,
+      "Nodo de Tránsito": 0
+    }
+  },
+  {
+    "sku": "15375",
+    "success": true,
+    "ms": 1053.530216217041,
+    "nombre": "SPLENDA ENDULZANTE X50 SOBRE",
+    "barras": [
+      "015375",
+      "722776020012"
+    ],
+    "depositos": {
+      "Almacén": 12,
+      "Piso de Venta": 7,
+      "Nodo de Tránsito": 0
+    }
+  },
+  {
+    "sku": "82220",
+    "success": true,
+    "ms": 1014.3942832946777,
+    "nombre": "GOM TRULULU SABORES X70 G",
+    "barras": [
+      "7702993051757",
+      "082220",
+      "083895",
+      "8697713822207"
+    ],
+    "depositos": {
+      "Almacén": 0,
+      "Piso de Venta": 4,
+      "Nodo de Tránsito": 0,
+      "150109": 0,
+      "Avería": 0
+    }
+  },
+  {
+    "sku": "82512",
+    "success": true,
+    "ms": 1014.8868560791016,
+    "nombre": "GOM TRULULU GUSANOS ACIDOS X 70 G",
+    "barras": [
+      "082512",
+      "7702993051733"
+    ],
+    "depositos": {
+      "Almacén": 193,
+      "Piso de Venta": 14,
+      "150109": 0,
+      "Nodo de Tránsito": 0,
+      "Avería": 0
+    }
+  },
+  {
+    "sku": "82513",
+    "success": true,
+    "ms": 904.2806625366211,
+    "nombre": "GOM TRULULU FRESITAS X 70 G",
+    "barras": [
+      "25133",
+      "7591818251393",
+      "082513",
+      "7591818251331",
+      "043996",
+      "003261",
+      "7702993051726",
+      "7591818716687",
+      "25139",
+      "003260",
+      "228JF5E00V"
+    ],
+    "depositos": {
+      "Almacén": 0,
+      "Piso de Venta": 0,
+      "150109": 0,
+      "Nodo de Tránsito": 0
+    }
+  },
+  {
+    "sku": "83169",
+    "success": true,
+    "ms": 1015.3510570526123,
+    "nombre": "TRULULU GOMITAS CON NANOS 70G",
+    "barras": [
+      "7702993059081",
+      "083169"
+    ],
+    "depositos": {
+      "Almacén": 168,
+      "Piso de Venta": 6,
+      "150109": 0,
+      "Nodo de Tránsito": 0
+    }
+  },
+  {
+    "sku": "20893",
+    "success": true,
+    "ms": 1040.391206741333,
+    "nombre": "COMPOTAS HEINZ MANZANA 186G",
+    "barras": [
+      "020893",
+      "7591112000017"
+    ],
+    "depositos": {
+      "Piso de Venta": 10,
+      "Almacén": 6,
+      "150109": 0,
+      "Nodo de Tránsito": 0,
+      "Avería": 0,
+      "Galpón": 0
+    }
+  },
+  {
+    "sku": "20895",
+    "success": true,
+    "ms": 1011.6381645202637,
+    "nombre": "COMPOTA HEINZ KIDZ FRUTAS MIX X 186 G",
+    "barras": [
+      "7591112000062",
+      "020895",
+      "7591112006033"
+    ],
+    "depositos": {
+      "Piso de Venta": 15,
+      "150109": 0,
+      "Almacén": 0,
+      "Nodo de Tránsito": 0,
+      "Galpón": 0
+    }
+  },
+  {
+    "sku": "47714",
+    "success": true,
+    "ms": 1026.742696762085,
+    "nombre": "HEINZ COLADO  POUCH PERA 113G",
+    "barras": [
+      "047714",
+      "7591112156486"
+    ],
+    "depositos": {
+      "Almacén": 48,
+      "Nodo de Tránsito": 12,
+      "Piso de Venta": 5,
+      "150109": 0,
+      "Avería": 0,
+      "Galpón": 0
+    }
+  },
+  {
+    "sku": "54273",
+    "success": true,
+    "ms": 902.3840427398682,
+    "nombre": "COMPOTA HEINZ PERA 186GR",
+    "barras": [
+      "006980",
+      "006981",
+      "054273",
+      "7703090112426",
+      "6682838100622",
+      "8029087002877",
+      "006978",
+      "7591112000024",
+      "7706659501709"
+    ],
+    "depositos": {
+      "Almacén": 0,
+      "Piso de Venta": 0,
+      "Avería": 1,
+      "Nodo de Tránsito": 0
+    }
+  },
+  {
+    "sku": "55932",
+    "success": true,
+    "ms": 976.9608974456787,
+    "nombre": "HEINZ COLADO POUCH MANZANA 113G",
+    "barras": [
+      "7591112156493",
+      "055932"
+    ],
+    "depositos": {
+      "Almacén": 26,
+      "Piso de Venta": 13,
+      "150109": 0,
+      "Nodo de Tránsito": 0,
+      "Galpón": 0
+    }
+  },
+  {
+    "sku": "59991",
+    "success": true,
+    "ms": 905.4558277130127,
+    "nombre": "NATULAC COLADO DE DURAZNO 186G",
+    "barras": [
+      "7592396003671",
+      "7596347792522",
+      "7599910793612",
+      "6913617148352",
+      "056165",
+      "7596347803471",
+      "7599910803472",
+      "059991",
+      "053736",
+      "7599917144301",
+      "069614",
+      "053480",
+      "7596347793611",
+      "7599910792523"
+    ],
+    "depositos": {
+      "Piso de Venta": 0,
+      "Almacén": 0
+    }
+  },
+  {
+    "sku": "59992",
+    "success": true,
+    "ms": 937.1914863586426,
+    "nombre": "ATUN SOLIDO AL NATURAL DIMARE 160GR",
+    "barras": [
+      "7599920000021",
+      "059992",
+      "082135",
+      "082134",
+      "7599920000014",
+      "7592396003688"
+    ],
+    "depositos": {
+      "Piso de Venta": 23,
+      "Almacén": 25,
+      "Nodo de Tránsito": 0,
+      "Avería": 0
+    }
+  },
+  {
+    "sku": "59993",
+    "success": true,
+    "ms": 1038.618803024292,
+    "nombre": "NATULAC COLADO DE MANZANA 186G",
+    "barras": [
+      "7592396003695",
+      "059993"
+    ],
+    "depositos": {
+      "Piso de Venta": 49,
+      "Almacén": 24,
+      "Nodo de Tránsito": 0,
+      "150109": 0
+    }
+  },
+  {
+    "sku": "60427",
+    "success": true,
+    "ms": 1014.7843360900879,
+    "nombre": "COMPOTA HEINZ MELOCOTON X 186 G",
+    "barras": [
+      "7591112000055",
+      "060427"
+    ],
+    "depositos": {
+      "Almacén": 12,
+      "Nodo de Tránsito": 12,
+      "Piso de Venta": 0,
+      "150109": 0,
+      "Galpón": 0,
+      "Interno": 0
+    }
+  },
+  {
+    "sku": "65161",
+    "success": true,
+    "ms": 1140.48171043396,
+    "nombre": "COLADO HEINZ FRUTAS TROPICALES X 186 G",
+    "barras": [
+      "065161",
+      "7591112000079",
+      "8541885418853"
+    ],
+    "depositos": {
+      "Almacén": 12,
+      "Piso de Venta": 10,
+      "Nodo de Tránsito": 0,
+      "Galpón": 0,
+      "150109": 0
+    }
+  },
+  {
+    "sku": "65952",
+    "success": true,
+    "ms": 858.0656051635742,
+    "nombre": "TIRAS REACTIVAS BMS P/GLUCOMETRO X5",
+    "barras": [
+      "077009",
+      "073713",
+      "0659525103095",
+      "065952",
+      "0659525103088",
+      "0659525103118",
+      "071835",
+      "659525103095",
+      "7591112156455",
+      "659525103088",
+      "071689",
+      "659525103071"
+    ],
+    "depositos": {
+      "Piso de Venta": 0,
+      "Avería": 1,
+      "Almacén": 0
+    }
+  },
+  {
+    "sku": "67685",
+    "success": true,
+    "ms": 1070.4174041748047,
+    "nombre": "COLADO HEINZ POSTRE FRUTAS X 113 G POUCH",
+    "barras": [
+      "7591112000154",
+      "067685"
+    ],
+    "depositos": {
+      "Piso de Venta": 18,
+      "Nodo de Tránsito": 0,
+      "Avería": 0,
+      "Galpón": 0,
+      "Almacén": 0
+    }
+  },
+  {
+    "sku": "74157",
+    "success": true,
+    "ms": 1069.9405670166016,
+    "nombre": "COLADO OSOLE BABY FRUTAS MIXTAS X 100 G",
+    "barras": [
+      "7595826004323",
+      "074157"
+    ],
+    "depositos": {
+      "Almacén": 78,
+      "Piso de Venta": 7,
+      "Nodo de Tránsito": 0,
+      "Avería": -1
+    }
+  },
+  {
+    "sku": "74422",
+    "success": true,
+    "ms": 1033.7629318237305,
+    "nombre": "COLADO OSOLE BABY PERA X 100 G",
+    "barras": [
+      "074422",
+      "7595826004316"
+    ],
+    "depositos": {
+      "Almacén": 36,
+      "Piso de Venta": 24,
+      "150109": 0,
+      "Nodo de Tránsito": 0,
+      "Avería": 0
+    }
+  },
+  {
+    "sku": "74423",
+    "success": true,
+    "ms": 1040.245532989502,
+    "nombre": "COLADO OSOLE BABY MANZANA X 100 G",
+    "barras": [
+      "074423",
+      "7595826004293"
+    ],
+    "depositos": {
+      "Piso de Venta": 28,
+      "Almacén": 0,
+      "150109": 0,
+      "Nodo de Tránsito": 0,
+      "Avería": 0
+    }
+  },
+  {
+    "sku": "74424",
+    "success": true,
+    "ms": 1033.9350700378418,
+    "nombre": "COLADO OSOLE BABY DURAZNO X 100 G",
+    "barras": [
+      "074424",
+      "7595826006761"
+    ],
+    "depositos": {
+      "Piso de Venta": 20,
+      "Almacén": 17,
+      "150109": 0,
+      "Nodo de Tránsito": 0
+    }
+  },
+  {
+    "sku": "78464",
+    "success": true,
+    "ms": 1043.884515762329,
+    "nombre": "COLADO OSOLE BABY BANANA X 100 G",
+    "barras": [
+      "7595826006914",
+      "078464"
+    ],
+    "depositos": {
+      "Almacén": 60,
+      "Piso de Venta": 21,
+      "150109": 0,
+      "Nodo de Tránsito": 0,
+      "Avería": -1
+    }
+  },
+  {
+    "sku": "78465",
+    "success": true,
+    "ms": 1017.2555446624756,
+    "nombre": "COLADO OSOLE BABY CIRUELA X 100 G",
+    "barras": [
+      "078465",
+      "7595826004309"
+    ],
+    "depositos": {
+      "Piso de Venta": 13,
+      "Almacén": 0,
+      "Nodo de Tránsito": 0,
+      "Avería": 0
+    }
+  },
+  {
+    "sku": "79629",
+    "success": true,
+    "ms": 983.8976860046387,
+    "nombre": "COLADO OSOLE BABY MANGO 100GR",
+    "barras": [
+      "079629",
+      "7595826006921"
+    ],
+    "depositos": {
+      "Almacén": 47,
+      "Piso de Venta": 25,
+      "150109": 0,
+      "Nodo de Tránsito": 0,
+      "Avería": 0
+    }
+  },
+  {
+    "sku": "81112",
+    "success": true,
+    "ms": 1012.0563507080078,
+    "nombre": "COLADO MANZANA S/A OSOLE 100GR.",
+    "barras": [
+      "7595826007959",
+      "081112"
+    ],
+    "depositos": {
+      "Almacén": 51,
+      "Piso de Venta": 14,
+      "Nodo de Tránsito": 0,
+      "Avería": -1
+    }
+  },
+  {
+    "sku": "81600",
+    "success": true,
+    "ms": 867.8264617919922,
+    "nombre": "SARDINA ORIENTE E/SALSA D/TOMATE X 170 G",
+    "barras": [
+      "081600",
+      "075716",
+      "6956006816001",
+      "6956006816002",
+      "7592816000136",
+      "071685",
+      "7592816000129",
+      "7595826007935",
+      "071686"
+    ],
+    "depositos": {
+      "Almacén": 0,
+      "Piso de Venta": 0,
+      "Nodo de Tránsito": 0
+    }
+  },
+  {
+    "sku": "81601",
+    "success": true,
+    "ms": 976.7789840698242,
+    "nombre": "COLADO D/COCTEL D/FRUTAS S/A OSOLE 100GR",
+    "barras": [
+      "7595826007942",
+      "081601"
+    ],
+    "depositos": {
+      "Piso de Venta": 18,
+      "Almacén": 12,
+      "Nodo de Tránsito": 0
+    }
+  },
+  {
+    "sku": "81613",
+    "success": true,
+    "ms": 1016.3478851318359,
+    "nombre": "COLADO PERA Y DURAZNO S/A OSOLE 100GR",
+    "barras": [
+      "081613",
+      "8161381613813",
+      "066910",
+      "7595826007966"
+    ],
+    "depositos": {
+      "Piso de Venta": 0,
+      "Almacén": 0,
+      "Avería": 0,
+      "Nodo de Tránsito": 0
+    }
+  },
+  {
+    "sku": "82111",
+    "success": true,
+    "ms": 942.9492950439453,
+    "nombre": "COLADO DE MANZANA POLLY 100GR",
+    "barras": [
+      "082111",
+      "7591112000680"
+    ],
+    "depositos": {
+      "Piso de Venta": 35,
+      "Almacén": 27,
+      "Nodo de Tránsito": 0,
+      "Galpón": 0
+    }
+  },
+  {
+    "sku": "84159",
+    "success": true,
+    "ms": 1024.9443054199219,
+    "nombre": "COLADO MANZANA OSOLE X 150G",
+    "barras": [
+      "7595826008499",
+      "7700304666638",
+      "070816",
+      "084159",
+      "7700304084159"
+    ],
+    "depositos": {
+      "Piso de Venta": 22,
+      "Almacén": 0,
+      "Nodo de Tránsito": 0
+    }
+  },
+  {
+    "sku": "84162",
+    "success": true,
+    "ms": 993.6726093292236,
+    "nombre": "COLADO FRUTAS MIXTAS OSOLE X 150G",
+    "barras": [
+      "7595826008505",
+      "084162"
+    ],
+    "depositos": {
+      "Almacén": 24,
+      "Piso de Venta": 10,
+      "Nodo de Tránsito": 0
+    }
+  },
+  {
+    "sku": "9832",
+    "success": true,
+    "ms": 930.1471710205078,
+    "nombre": "ARROZ PRIMOR TRADICIONAL X 900G",
+    "barras": [
+      "079832",
+      "8537985379859",
+      "009832",
+      "7598322318529",
+      "076975",
+      "7591585217639",
+      "026373",
+      "7598322318512",
+      "7591002800109",
+      "038000284472",
+      "045463",
+      "7598322318505",
+      "054329",
+      "076974"
+    ],
+    "depositos": {
+      "Almacén": 0,
+      "Piso de Venta": 1,
+      "Nodo de Tránsito": 0
+    }
+  },
+  {
+    "sku": "13586",
+    "success": true,
+    "ms": 2303.013563156128,
+    "nombre": "ARROZ MARY INTEGRAL X 800 G",
+    "barras": [
+      "7591473000442",
+      "013586",
+      "2019060913586",
+      "077891"
+    ],
+    "depositos": {
+      "Almacén": 0,
+      "Piso de Venta": 0,
+      "150109": 0,
+      "Nodo de Tránsito": 0,
+      "Avería": 0
+    }
+  },
+  {
+    "sku": "13587",
+    "success": true,
+    "ms": 2332.228422164917,
+    "nombre": "MARY ARROZ SUPERIOR 900GR",
+    "barras": [
+      "7591473005355",
+      "013587",
+      "860000853132",
+      "055420",
+      "860011358701",
+      "7591473000015"
+    ],
+    "depositos": {
+      "Almacén": 0,
+      "Piso de Venta": 0,
+      "Avería": 4,
+      "Nodo de Tránsito": 0,
+      "Interno": 0,
+      "Galpón": 0
+    }
+  },
+  {
+    "sku": "23531",
+    "success": true,
+    "ms": 993.3648109436035,
+    "nombre": "ARROZ MARY TRADICIONAL 900G",
+    "barras": [
+      "7591473005362",
+      "7591473000619",
+      "023531"
+    ],
+    "depositos": {
+      "Almacén": 192,
+      "Piso de Venta": 58,
+      "Avería": 6,
+      "Nodo de Tránsito": 0
+    }
+  },
+  {
+    "sku": "51606",
+    "success": true,
+    "ms": 998.115062713623,
+    "nombre": "ARROZ MARY DORADO X 800 G",
+    "barras": [
+      "043163",
+      "7591473005492",
+      "7500435160674",
+      "051606"
+    ],
+    "depositos": {
+      "Piso de Venta": 4,
+      "Almacén": 4,
+      "150109": 0,
+      "Nodo de Tránsito": 0,
+      "Avería": 0
+    }
+  },
+  {
+    "sku": "55789",
+    "success": true,
+    "ms": 1220.0090885162354,
+    "nombre": "MARY ARROZ PREMIUM 900GR",
+    "barras": [
+      "667557597089",
+      "667557589558",
+      "055789",
+      "7591473005249",
+      "667558379622",
+      "078852",
+      "667558216019",
+      "667558701669",
+      "667556977387",
+      "667558180693",
+      "667557895703",
+      "667558334508",
+      "667558717523",
+      "667558547106",
+      "667558533970",
+      "667557597232"
+    ],
+    "depositos": {
+      "Piso de Venta": 0,
+      "Almacén": 0,
+      "Avería": 8,
+      "150109": 0,
+      "Nodo de Tránsito": 0,
+      "Interno": 0
+    }
+  },
+  {
+    "sku": "59860",
+    "success": true,
+    "ms": 976.0420322418213,
+    "nombre": "MARY ARROZ ESMERALDA 900 GR",
+    "barras": [
+      "7591473005232",
+      "059860"
+    ],
+    "depositos": {
+      "Piso de Venta": 455,
+      "Almacén": 28,
+      "Avería": 1,
+      "Nodo de Tránsito": 0,
+      "Interno": 0,
+      "Galpón": 0
+    }
+  },
+  {
+    "sku": "60628",
+    "success": true,
+    "ms": 1059.4100952148438,
+    "nombre": "ARROZ BLANCO MASIA 900GR",
+    "barras": [
+      "7591807000209",
+      "060628",
+      "7591807000292"
+    ],
+    "depositos": {
+      "Piso de Venta": 562,
+      "150109": 288,
+      "Almacén": 221,
+      "Avería": 17,
+      "Nodo de Tránsito": 0,
+      "Interno": 0,
+      "Galpón": 0
+    }
+  },
+  {
+    "sku": "81175",
+    "success": true,
+    "ms": 1014.0664577484131,
+    "nombre": "ARROZ PRIMOR CLASICO SUPERIOR 900GR.",
+    "barras": [
+      "8906089281175",
+      "081175",
+      "7591002800093",
+      "060086"
+    ],
+    "depositos": {
+      "Piso de Venta": 0,
+      "Almacén": 0,
+      "Nodo de Tránsito": 0,
+      "Avería": 0
+    }
+  },
+  {
+    "sku": "81948",
+    "success": true,
+    "ms": 1042.428970336914,
+    "nombre": "ARROZ MARY PREMIUM 2KG",
+    "barras": [
+      "081948",
+      "006917",
+      "7591651002022",
+      "7591473005591"
+    ],
+    "depositos": {
+      "150109": 48,
+      "Almacén": 0,
+      "Avería": 17,
+      "Piso de Venta": 0,
+      "Nodo de Tránsito": 0
+    }
+  },
+  {
+    "sku": "80227",
+    "success": true,
+    "ms": 1080.9030532836914,
+    "nombre": "ACONDI EVERY NIGHT BIO COCO X 210 ML",
+    "barras": [
+      "7590005164560",
+      "053357",
+      "7591098802278",
+      "080227",
+      "7702123409861",
+      "4057598022767",
+      "001184"
+    ],
+    "depositos": {
+      "Almacén": 0,
+      "Piso de Venta": 0
+    }
+  },
+  {
+    "sku": "11533",
+    "success": true,
+    "ms": 1022.9501724243164,
+    "nombre": "GILLETTE VENUS SIMPLY 3 X2 UNID",
+    "barras": [
+      "011533",
+      "7702018072392",
+      "049985",
+      "6971077611533"
+    ],
+    "depositos": {
+      "Almacén": 0,
+      "Piso de Venta": 7,
+      "Nodo de Tránsito": 0
+    }
+  },
+  {
+    "sku": "14994",
+    "success": true,
+    "ms": 1070.8341598510742,
+    "nombre": "MAQ SCHICK EXACTA P/SENSIB X5",
+    "barras": [
+      "014994",
+      "7591066680198"
+    ],
+    "depositos": {
+      "Piso de Venta": 12,
+      "Almacén": 1,
+      "Nodo de Tránsito": 0
+    }
+  },
+  {
+    "sku": "15403",
+    "success": true,
+    "ms": 1074.5277404785156,
+    "nombre": "AFEITADORA SCHICK XTREME3 HAWAIIAN TROPIC X 2",
+    "barras": [
+      "7591066712011",
+      "015403"
+    ],
+    "depositos": {
+      "Piso de Venta": 8,
+      "Almacén": 6,
+      "Nodo de Tránsito": 0
+    }
+  },
+  {
+    "sku": "18550",
+    "success": true,
+    "ms": 1003.4549236297607,
+    "nombre": "MAQ SCHICK QUATTRO DES HOMBRE X 1",
+    "barras": [
+      "018550",
+      "4891228530136"
+    ],
+    "depositos": {
+      "Almacén": 100,
+      "Piso de Venta": 8,
+      "Nodo de Tránsito": 0,
+      "Avería": 0
+    }
+  },
+  {
+    "sku": "26084",
+    "success": true,
+    "ms": 1037.4536514282227,
+    "nombre": "MAQ D/AFEIT SCHICK XTREME P/NORMAL X 1 UND",
+    "barras": [
+      "7591066721020",
+      "026084"
+    ],
+    "depositos": {
+      "Almacén": 70,
+      "Piso de Venta": 13,
+      "Nodo de Tránsito": 0
+    }
+  },
+  {
+    "sku": "43163",
+    "success": true,
+    "ms": 949.8343467712402,
+    "nombre": "AFEITADORA GILLETTE 2 X5 UNID",
+    "barras": [
+      "043163",
+      "7500435160674"
+    ],
+    "depositos": {
+      "Almacén": 8,
+      "Piso de Venta": 4,
+      "Avería": 0,
+      "Nodo de Tránsito": 0
+    }
+  },
+  {
+    "sku": "43486",
+    "success": true,
+    "ms": 1072.0531940460205,
+    "nombre": "MAQ D/AFEIT GILLETTE MACH 3 RECARGABLE X 1",
+    "barras": [
+      "7702018001071",
+      "7500435141536",
+      "043486"
+    ],
+    "depositos": {
+      "Almacén": 12,
+      "Piso de Venta": 11,
+      "150109": 0
+    }
+  },
+  {
+    "sku": "43497",
+    "success": true,
+    "ms": 1049.1917133331299,
+    "nombre": "GILLETTE MAQ PRESTOBARBA3 X 1 UNID",
+    "barras": [
+      "7434974349743",
+      "7671976719765",
+      "047343",
+      "043497",
+      "7702018880409"
+    ],
+    "depositos": {
+      "Almacén": 0,
+      "Piso de Venta": 12,
+      "Nodo de Tránsito": 0,
+      "150109": 0,
+      "Avería": 0
+    }
+  },
+  {
+    "sku": "45729",
+    "success": true,
+    "ms": 1000.8547306060791,
+    "nombre": "MAQ D/AFEIT GILLETTE VENUS ESSENTIAL CARE RECARG X 1",
+    "barras": [
+      "7506309841762",
+      "045729"
+    ],
+    "depositos": {
+      "Piso de Venta": 6,
+      "Almacén": 1,
+      "Nodo de Tránsito": 0
+    }
+  },
+  {
+    "sku": "51431",
+    "success": true,
+    "ms": 981.4889430999756,
+    "nombre": "GILLETTE VENUS SIMPLY 3 X4 UNID",
+    "barras": [
+      "018565",
+      "7703293251649",
+      "7702018072408",
+      "055916",
+      "078192",
+      "300651431483",
+      "7500435143189",
+      "7500435143196",
+      "7896548197738",
+      "051431"
+    ],
+    "depositos": {
+      "Piso de Venta": 0,
+      "Almacén": 0,
+      "Nodo de Tránsito": 0,
+      "150109": 0
+    }
+  },
+  {
+    "sku": "53812",
+    "success": true,
+    "ms": 1008.385181427002,
+    "nombre": "DALAN MAQ D/ AFEITAR DESECH X 3UND",
+    "barras": [
+      "053812",
+      "4901331000133"
+    ],
+    "depositos": {
+      "Piso de Venta": 7,
+      "Nodo de Tránsito": 0,
+      "Almacén": -78
+    }
+  },
+  {
+    "sku": "54448",
+    "success": true,
+    "ms": 1048.9511489868164,
+    "nombre": "GILLETTE MACH 3 CARBONO REPUESTO X2UND",
+    "barras": [
+      "7500435211390",
+      "054448"
+    ],
+    "depositos": {
+      "Piso de Venta": 9,
+      "Almacén": 1,
+      "Nodo de Tránsito": 0
+    }
+  },
+  {
+    "sku": "54522",
+    "success": true,
+    "ms": 1061.2857341766357,
+    "nombre": "MAQ EXACTA2 P/SENS VERDE X 1",
+    "barras": [
+      "042675",
+      "7501037608946",
+      "054522",
+      "7702098026063"
+    ],
+    "depositos": {
+      "Almacén": 0,
+      "Piso de Venta": 0,
+      "Nodo de Tránsito": 0,
+      "150109": 0
+    }
+  },
+  {
+    "sku": "54526",
+    "success": true,
+    "ms": 1021.5356349945068,
+    "nombre": "AFEITADORA EXTREME SCHICK NORMAL BLT X2",
+    "barras": [
+      "4005808630646",
+      "082631",
+      "042237",
+      "054526",
+      "7501054526131",
+      "7591066722027",
+      "7501054526483",
+      "7502214739507"
+    ],
+    "depositos": {
+      "Piso de Venta": 0,
+      "Almacén": 0,
+      "Nodo de Tránsito": 0
+    }
+  },
+  {
+    "sku": "62429",
+    "success": true,
+    "ms": 1015.6209468841553,
+    "nombre": "JAB EVERY NIGHT BIONUTRIENTES MANZANZA VERDE X 110 G",
+    "barras": [
+      "062429",
+      "7590005162429",
+      "058547",
+      "7502214739620"
+    ],
+    "depositos": {
+      "Almacén": 54,
+      "Piso de Venta": 8,
+      "Nodo de Tránsito": 0
+    }
+  }
+]

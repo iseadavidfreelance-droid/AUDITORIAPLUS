@@ -29,7 +29,7 @@ import { useMissionStore } from '../store/useMissionStore';
 import { useDiscrepancyStore } from '../stores/useDiscrepancyStore';
 import { useOnlineStatus } from '../hooks/useOnlineStatus';
 import { enqueueOfflineEvent } from '../lib/db';
-import { FloorDiscrepancy, VirtualTransfer } from '../types/audit';
+import { targetDiscrepancy, VirtualTransfer } from '../types/audit';
 
 export const TabFloorReconciliation: React.FC = () => {
   const isOnline = useOnlineStatus();
@@ -43,7 +43,7 @@ export const TabFloorReconciliation: React.FC = () => {
   } = useDiscrepancyStore();
 
   // Estados locales
-  const [selectedDiscrepancy, setSelectedDiscrepancy] = useState<FloorDiscrepancy | null>(null);
+  const [selectedDiscrepancy, setSelectedDiscrepancy] = useState<targetDiscrepancy | null>(null);
   const [floorCountedInput, setFloorCountedInput] = useState<string>('');
   const [floorSystemInput, setFloorSystemInput] = useState<string>('0');
   const [isLoading, setIsLoading] = useState<boolean>(false);
@@ -68,19 +68,19 @@ export const TabFloorReconciliation: React.FC = () => {
       if (error) {
         console.warn('[TabFloorReconciliation] Error al obtener Read_Floor_Discrepancies:', error);
       } else if (data) {
-        const mappedDiscrepancies: FloorDiscrepancy[] = data.map((d) => ({
+        const mappedDiscrepancies: targetDiscrepancy[] = data.map((d) => ({
           DiscrepancyId: d.DiscrepancyId || d.discrepancyId,
           TaskId: d.TaskId || d.taskId || '',
           MissionId: d.MissionId || d.missionId || activeMissionId,
           SkuCode: d.SkuCode || d.skuCode || '',
           SkuDescription: d.SkuDescription || d.skuDescription || 'Artículo de inventario',
-          MissingQuantity: Number(d.WarehouseDiscrepancy ?? d.MissingQuantity ?? 0),
+          MissingQuantity: Number(d.originDiscrepancy ?? d.MissingQuantity ?? 0),
           OriginDeposit: d.OriginDeposit || '150101',
-          FloorDeposit: d.FloorDeposit || '150103',
-          WarehouseDiscrepancy: Number(d.WarehouseDiscrepancy ?? d.MissingQuantity ?? 0),
-          FloorSystemQuantity: Number(d.FloorSystemQuantity ?? 0),
-          FloorCountedQuantity: d.FloorCountedQuantity !== null ? Number(d.FloorCountedQuantity) : null,
-          FloorDiscrepancy: d.FloorDiscrepancy !== null ? Number(d.FloorDiscrepancy) : null,
+          targetDeposit: d.targetDeposit || '150103',
+          originDiscrepancy: Number(d.originDiscrepancy ?? d.MissingQuantity ?? 0),
+          targetSystemQuantity: Number(d.targetSystemQuantity ?? 0),
+          targetCountedQuantity: d.targetCountedQuantity !== null ? Number(d.targetCountedQuantity) : null,
+          targetDiscrepancy: d.targetDiscrepancy !== null ? Number(d.targetDiscrepancy) : null,
           Status: d.Status || 'OPEN',
           ResolvedAt: d.ResolvedAt || null,
           CreatedAt: d.CreatedAt || new Date().toISOString(),
@@ -112,20 +112,20 @@ export const TabFloorReconciliation: React.FC = () => {
   }, [fetchOpenDiscrepancies]);
 
   // Selección de ítem discrepante
-  const handleSelectDiscrepancy = (disc: FloorDiscrepancy) => {
+  const handleSelectDiscrepancy = (disc: targetDiscrepancy) => {
     setSelectedDiscrepancy(disc);
     setFloorCountedInput('');
-    setFloorSystemInput(String(disc.FloorSystemQuantity || 0));
+    setFloorSystemInput(String(disc.targetSystemQuantity || 0));
   };
 
   // Cálculos visuales inmediatos de compensación y traslado virtual
   const warehouseShortfall = Math.abs(
-    Number(selectedDiscrepancy?.WarehouseDiscrepancy ?? selectedDiscrepancy?.MissingQuantity ?? 0)
+    Number(selectedDiscrepancy?.originDiscrepancy ?? selectedDiscrepancy?.MissingQuantity ?? 0)
   );
   const floorCounted = parseFloat(floorCountedInput);
   const isFloorCountValid = !isNaN(floorCounted) && floorCounted >= 0;
   const floorSystem = parseFloat(floorSystemInput) || 0;
-  const floorDiscrepancy = isFloorCountValid ? floorCounted - floorSystem : 0;
+  const targetDiscrepancy = isFloorCountValid ? floorCounted - floorSystem : 0;
 
   // Cantidad compensable transferible a tránsito (150104)
   // min(|Faltante_Almacén|, Conteo_en_Piso)
@@ -171,7 +171,7 @@ export const TabFloorReconciliation: React.FC = () => {
       sku_code: skuCode,
       sku_description: skuDesc,
       origin_deposit: selectedDiscrepancy.OriginDeposit || '150101',
-      warehouse_discrepancy: selectedDiscrepancy.WarehouseDiscrepancy || selectedDiscrepancy.MissingQuantity,
+      warehouse_discrepancy: selectedDiscrepancy.originDiscrepancy || selectedDiscrepancy.MissingQuantity,
       floor_counted_qty: floorCounted,
       floor_system_qty: floorSystem,
       sales_during_audit: 0,
@@ -190,8 +190,8 @@ export const TabFloorReconciliation: React.FC = () => {
           await supabase
             .from('Read_Floor_Discrepancies')
             .update({
-              FloorCountedQuantity: floorCounted,
-              FloorDiscrepancy: floorDiscrepancy,
+              targetCountedQuantity: floorCounted,
+              targetDiscrepancy: targetDiscrepancy,
               Status: 'RESOLVED',
               ResolvedAt: new Date().toISOString(),
               UpdatedAt: new Date().toISOString(),
@@ -379,8 +379,8 @@ export const TabFloorReconciliation: React.FC = () => {
             <div className="bg-slate-950/90 border border-slate-700 p-4 rounded-xl space-y-3">
               <div className="flex items-center justify-between text-xs sm:text-sm font-semibold pb-2 border-b border-slate-800">
                 <span className="text-slate-400">Balance Calculado:</span>
-                <span className={`font-mono font-bold ${floorDiscrepancy >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                  {floorDiscrepancy >= 0 ? `+${floorDiscrepancy.toFixed(2)}` : floorDiscrepancy.toFixed(2)} u en Piso
+                <span className={`font-mono font-bold ${targetDiscrepancy >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                  {targetDiscrepancy >= 0 ? `+${targetDiscrepancy.toFixed(2)}` : targetDiscrepancy.toFixed(2)} u en Piso
                 </span>
               </div>
 
@@ -477,7 +477,7 @@ export const TabFloorReconciliation: React.FC = () => {
         ) : (
           <div className="space-y-3">
             {filteredDiscrepancies.map((disc) => {
-              const shortfall = Math.abs(Number(disc.WarehouseDiscrepancy ?? disc.MissingQuantity ?? 0));
+              const shortfall = Math.abs(Number(disc.originDiscrepancy ?? disc.MissingQuantity ?? 0));
               const isSelected = (disc.DiscrepancyId || disc.discrepancyId) === (selectedDiscrepancy?.DiscrepancyId || selectedDiscrepancy?.discrepancyId);
 
               return (
