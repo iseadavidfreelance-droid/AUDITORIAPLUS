@@ -2,7 +2,7 @@
  * AUDITORIAPLUS+ - PWA de Auditoría de Inventario Físico
  * Layout Principal PWA: Barra Superior de Control, Bottom Navigation Dock y Flujo CQRS.
  * Cero datos mock. Modo offline transparente con IndexedDB (AuditDB) y sincronización automática.
- * FASE 1.5: Login Modo Quiosco + Control de Roles + Misión Global Persistente.
+ * FASE 1.5: Login Modo Quiosco + Control de Roles Estricto + Misión Global Persistente.
  */
 
 import React, { useEffect, useState, useTransition, useRef } from 'react';
@@ -88,6 +88,12 @@ export default function App() {
   // NUEVO: Ref para evitar rebotes infinitos al emitir la misión global
   const lastBroadcastedMissionRef = useRef<string | null>(null);
 
+  // NUEVO: Función inteligente para cambiar de pestaña y guardar en memoria local
+  const changeTab = (tab: ActiveTab) => {
+    setActiveTab(tab);
+    localStorage.setItem('auditoria_active_tab', tab); // Guarda la pestaña actual en memoria
+  };
+
   // Consultar Rol Oficial en la Base de Datos
   const fetchUserRole = async (userId: string) => {
     try {
@@ -99,8 +105,15 @@ export default function App() {
       
       const role = data?.Role || 'auditor';
       setUserRole(role);
-      // Ruteo automático: Admin va a Ingesta, Auditor va a Almacén
-      setActiveTab(role === 'admin' ? 'ingestion' : 'mission'); 
+      
+      // NUEVO: Al iniciar o recargar (F5), cargar la pestaña donde el usuario estaba
+      const savedTab = localStorage.getItem('auditoria_active_tab') as ActiveTab;
+      if (savedTab) {
+        setActiveTab(savedTab);
+      } else {
+        // Fallback original si no hay historial
+        changeTab(role === 'admin' ? 'ingestion' : 'mission');
+      }
     } catch (err) {
       console.error("Error obteniendo rol", err);
       setUserRole('auditor');
@@ -279,6 +292,12 @@ export default function App() {
     setIsLoggingIn(false);
   };
 
+  // LOGOUT (Limpia también la memoria de pestañas)
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    localStorage.removeItem('auditoria_active_tab'); 
+  };
+
   // PANTALLA DE CARGA GLOBAL
   if (isCheckingAuth) {
     return (
@@ -362,7 +381,7 @@ export default function App() {
               <div className="flex items-center gap-1.5 mt-0.5">
                 {activeMissionId ? (
                   <button
-                    onClick={() => userRole === 'admin' && setActiveTab('ingestion')}
+                    onClick={() => userRole === 'admin' && changeTab('ingestion')}
                     className={`text-[11px] font-mono font-bold flex items-center gap-1 transition ${userRole === 'admin' ? 'text-emerald-400 hover:text-emerald-300' : 'text-emerald-400 cursor-default'}`}
                   >
                     <span>Misión: {activeMissionId.slice(0, 8)}</span>
@@ -370,7 +389,7 @@ export default function App() {
                   </button>
                 ) : (
                   <button
-                    onClick={() => userRole === 'admin' && setActiveTab('ingestion')}
+                    onClick={() => userRole === 'admin' && changeTab('ingestion')}
                     className={`text-[11px] font-bold flex items-center gap-1 ${userRole === 'admin' ? 'text-amber-400 hover:text-amber-300' : 'text-amber-400 cursor-default'}`}
                   >
                     {/* Ajuste visual para el auditor cuando aún no hay misión */}
@@ -416,7 +435,7 @@ export default function App() {
             </div>
 
             {/* Logout */}
-            <button onClick={async () => await supabase.auth.signOut()} className="p-1.5 text-slate-400 hover:text-rose-400 bg-slate-800 rounded-lg transition" title="Salir">
+            <button onClick={handleLogout} className="p-1.5 text-slate-400 hover:text-rose-400 bg-slate-800 rounded-lg transition" title="Salir">
               <LogOut className="w-4 h-4" />
             </button>
           </div>
@@ -428,12 +447,12 @@ export default function App() {
       {/* ============================================================ */}
       <main className="flex-1 p-3 sm:p-5 max-w-5xl mx-auto w-full space-y-4">
         {activeTab === 'ingestion' && userRole === 'admin' && (
-          <TabIngestion onMissionSelected={() => setActiveTab('mission')} />
+          <TabIngestion onMissionSelected={() => changeTab('mission')} />
         )}
 
         {activeTab === 'mission' && (
           <div className="space-y-4">
-            <TabCollector onNavigateToFloor={() => setActiveTab('discrepancies')} />
+            <TabCollector onNavigateToFloor={() => changeTab('discrepancies')} />
           </div>
         )}
 
@@ -454,7 +473,7 @@ export default function App() {
           {/* Tab 1: Ingesta / Misiones (SÓLO ADMIN) */}
           {userRole === 'admin' && (
             <button
-              onClick={() => setActiveTab('ingestion')}
+              onClick={() => changeTab('ingestion')}
               className={`flex-1 flex flex-col items-center justify-center min-h-[56px] py-1 px-1 rounded-xl font-bold text-[11px] transition touch-manipulation active:scale-95 ${
                 activeTab === 'ingestion'
                   ? 'text-blue-400 bg-blue-950/40 border border-blue-500/30'
@@ -468,7 +487,7 @@ export default function App() {
 
           {/* Tab 2: Colector Almacén (150101) */}
           <button
-            onClick={() => setActiveTab('mission')}
+            onClick={() => changeTab('mission')}
             className={`flex-1 flex flex-col items-center justify-center min-h-[56px] py-1 px-1 rounded-xl font-bold text-[11px] transition touch-manipulation active:scale-95 ${
               activeTab === 'mission'
                 ? 'text-emerald-400 bg-emerald-950/40 border border-emerald-500/30'
@@ -481,7 +500,7 @@ export default function App() {
 
           {/* Tab 3: Reconciliación Piso (150103) */}
           <button
-            onClick={() => setActiveTab('discrepancies')}
+            onClick={() => changeTab('discrepancies')}
             className={`flex-1 flex flex-col items-center justify-center min-h-[56px] py-1 px-1 rounded-xl font-bold text-[11px] transition touch-manipulation relative active:scale-95 ${
               activeTab === 'discrepancies'
                 ? 'text-amber-400 bg-amber-950/40 border border-amber-500/30'
@@ -501,7 +520,7 @@ export default function App() {
 
           {/* Tab 4: Reportes */}
           <button
-            onClick={() => setActiveTab('reports')}
+            onClick={() => changeTab('reports')}
             className={`flex-1 flex flex-col items-center justify-center min-h-[56px] py-1 px-1 rounded-xl font-bold text-[11px] transition touch-manipulation active:scale-95 ${
               activeTab === 'reports'
                 ? 'text-indigo-400 bg-indigo-950/40 border border-indigo-500/30'
