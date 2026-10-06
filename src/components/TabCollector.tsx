@@ -4,6 +4,7 @@
  * Mínimo 48px - 56px por botón, contraste extremo, modo offline garantizado.
  * Integración de Escáner Óptico de Cámara HTML5 con retícula verde y flash toggle.
  * FASE 1: Inyección de Estadísticas en Tiempo Real.
+ * FASE 2: Interceptor de API Maraplus en Vivo y Flujo Bidireccional.
  */
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
@@ -20,7 +21,8 @@ import {
   Camera,
   CameraOff,
   Scan,
-  Sparkles
+  Sparkles,
+  RefreshCw
 } from 'lucide-react';
 import { Html5Qrcode } from 'html5-qrcode';
 import { useMissionStore } from '../store/useMissionStore';
@@ -29,7 +31,6 @@ import { useOnlineStatus } from '../hooks/useOnlineStatus';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import { enqueueOfflineEvent } from '../lib/db';
 import { normalizeSku, FloorDiscrepancy } from '../types/audit';
-// NUEVO: Importación del store de Auth para inyectar el user_id
 import { useAuthStore } from '../stores/useAuthStore';
 
 interface TabCollectorProps {
@@ -40,7 +41,6 @@ const VIEWPORT_ID = 'barcode-scanner-viewport';
 
 export const TabCollector: React.FC<TabCollectorProps> = ({ onNavigateToFloor }) => {
   const isOnline = useOnlineStatus();
-  // NUEVO: Extraemos el usuario actual
   const user = useAuthStore(state => state.user);
 
   // Stores
@@ -67,6 +67,14 @@ export const TabCollector: React.FC<TabCollectorProps> = ({ onNavigateToFloor })
     type: 'success' | 'warning' | 'error';
     discrepancyVal?: number;
   } | null>(null);
+
+  // --- NUEVOS ESTADOS FASE 2: INTERCEPTOR EN VIVO ---
+  const [isLiveFetching, setIsLiveFetching] = useState<boolean>(false);
+  const [liveData, setLiveData] = useState<{ systemQty: number | null; targetQty: number | null; targetDeposit: string | null }>({
+    systemQty: null,
+    targetQty: null,
+    targetDeposit: null
+  });
 
   // Estados de escáner de cámara
   const [isCameraActive, setIsCameraActive] = useState<boolean>(false);
@@ -111,8 +119,9 @@ export const TabCollector: React.FC<TabCollectorProps> = ({ onNavigateToFloor })
     []
   );
 
+  // --- LÓGICA INTERCEPTORA FASE 2: Modificada a ASYNC ---
   const processDetectedCode = useCallback(
-    (rawCode: string, origin: 'camera' | 'manual') => {
+    async (rawCode: string, origin: 'camera' | 'manual') => {
       if (!rawCode || !rawCode.trim()) return;
       const normalizedSku = applyLpadNormalization(rawCode);
 
@@ -128,7 +137,40 @@ export const TabCollector: React.FC<TabCollectorProps> = ({ onNavigateToFloor })
         scannerInputRef.current?.focus();
         scannerInputRef.current?.select();
       } else {
-        showToastBanner(`SKU ${task.SkuCode || task.skuCode} ${origin === 'camera' ? 'escaneado por cámara' : 'cargado'}`, 'success');
+        // --- INICIO INTERCEPTOR EN VIVO (FASE 2) ---
+        setIsLiveFetching(true);
+        try {
+          const res = await fetch(`http://192.168.15.225:3002/api/inventory?search=${normalizedSku}`);
+          
+          if (res.ok) {
+            const json = await res.json();
+            
+            if (json.success && json.data) {
+              // 1. Deducir Origen y Destino de forma agnóstica
+              const originDep = task.DepositCode || task.depositCode || '150101';
+              const targetDep = originDep === '150101' ? '150103' : '150101';
+              
+              // 2. Buscar las existencias físicas para ambos
+              const originItem = json.data.find((d: any) => d.codigo_deposito === originDep);
+              const targetItem = json.data.find((d: any) => d.codigo_deposito === targetDep);
+
+              // 3. Inyectar datos frescos en el estado
+              setLiveData({
+                systemQty: originItem ? Number(originItem.stock_quantity) : 0,
+                targetQty: targetItem ? Number(targetItem.stock_quantity) : 0,
+                targetDeposit: targetDep
+              });
+              
+              showToastBanner(`SKU ${task.SkuCode || task.skuCode} escaneado. Stock ERP actualizado en vivo.`, 'success');
+            }
+          }
+        } catch (err) {
+          console.warn('[Interceptor] Fallo al consultar API', err);
+          showToastBanner(`SKU ${task.SkuCode || task.skuCode} cargado. Sin conexión ERP, usando stock almacenado.`, 'warning');
+        } finally {
+          setIsLiveFetching(false);
+        }
+        // --- FIN INTERCEPTOR ---
       }
     },
     [setActiveTaskBySku, setSearchTerm, showToastBanner]
@@ -268,6 +310,8 @@ export const TabCollector: React.FC<TabCollectorProps> = ({ onNavigateToFloor })
     } else {
       setCountedInput('');
       setSalesInput('0');
+      // Reset de datos en vivo al limpiar la tarea
+      setLiveData({ systemQty: null, targetQty: null, targetDeposit: null });
     }
   }, [activeTask]);
 
@@ -282,9 +326,11 @@ export const TabCollector: React.FC<TabCollectorProps> = ({ onNavigateToFloor })
     setCountedInput(String(nextVal));
   };
 
-  const systemQty = Number(activeTask?.SystemQuantity ?? activeTask?.systemQuantity ?? 0);
+  // --- CÁLCULO TEÓRICO (Prioridad al dato del ERP en vivo) ---
+  const baseSystemQty = Number(activeTask?.SystemQuantity ?? activeTask?.systemQuantity ?? 0);
+  const finalSystemQty = liveData.systemQty !== null ? liveData.systemQty : baseSystemQty;
   const salesQty = parseFloat(salesInput) || 0;
-  const adjustedTheoretical = systemQty - salesQty;
+  const adjustedTheoretical = finalSystemQty - salesQty;
   const countedQty = parseFloat(countedInput);
   const isCountValid = !isNaN(countedQty) && countedQty >= 0;
   const liveDiscrepancy = isCountValid ? countedQty - adjustedTheoretical : 0;
@@ -307,21 +353,23 @@ export const TabCollector: React.FC<TabCollectorProps> = ({ onNavigateToFloor })
     }
 
     setIsSubmitting(true);
-    const discrepancy = Number((countedQty - adjustedTheoretical).toFixed(2));
+    const discrepancy = Number(liveDiscrepancy.toFixed(2));
     const taskStatus = discrepancy === 0 ? 'COMPLETED_MATCH' : 'DISCREPANT';
-    const skuCodeToUse = activeTask.SkuCode || activeTask.skuCode;
-    const missionIdToUse = activeMissionId || activeTask.MissionId || activeTask.missionId;
-    const taskIdToUse = activeTask.TaskId || activeTask.taskId;
-    const depositCodeToUse = activeTask.DepositCode || activeTask.depositCode || '150101';
-    const skuDescToUse = activeTask.SkuDescription || activeTask.skuDescription;
+    const skuCodeToUse = activeTask.SkuCode || activeTask.skuCode || '';
+    const missionIdToUse = activeMissionId || activeTask.MissionId || activeTask.missionId || '';
+    const taskIdToUse = activeTask.TaskId || activeTask.taskId || '';
+    const skuDescToUse = activeTask.SkuDescription || activeTask.skuDescription || '';
+
+    // Variables Bidireccionales extraídas del Interceptor o de la Tarea Original
+    const originDeposit = activeTask.DepositCode || activeTask.depositCode || '150101';
+    const targetDeposit = liveData.targetDeposit || (originDeposit === '150101' ? '150103' : '150101');
+    const targetSysQty = liveData.targetQty || 0;
 
     // 1. Actualización optimista local en memoria (Feedback Instantáneo al Operador)
     updateTaskCountLocally(skuCodeToUse, countedQty, salesQty, discrepancy, taskStatus);
 
-    // 2. Si se detecta discrepancia, registrar en cola local de piso (Agnóstico)
+    // 2. Si se detecta discrepancia, registrar en cola local de destino (Agnóstico)
     if (discrepancy !== 0) {
-      const targetDepositCode = depositCodeToUse === '150101' ? '150103' : '150101';
-      
       const discItem: FloorDiscrepancy = {
         discrepancyId: crypto.randomUUID ? crypto.randomUUID() : `disc_${Date.now()}`,
         taskId: taskIdToUse as any,
@@ -329,32 +377,33 @@ export const TabCollector: React.FC<TabCollectorProps> = ({ onNavigateToFloor })
         skuCode: skuCodeToUse,
         skuDescription: skuDescToUse,
         originDiscrepancy: discrepancy,
-        originDeposit: depositCodeToUse as any,
-        targetDeposit: targetDepositCode as any,
-        targetSystemQuantity: null,
+        originDeposit: originDeposit as any,
+        targetDeposit: targetDeposit as any,
+        targetSystemQuantity: targetSysQty,
         targetCountedQuantity: null,
         targetDiscrepancy: null,
         status: 'PENDING_TARGET_COUNT',
       };
-      addDiscrepancy(discItem);
+      addDiscrepancy(discItem as any);
     }
 
-    // 3. Payload oficial con USER_ID y SYSTEM_QUANTITY
+    // 3. Payload oficial integrando la info del destino para la Edge Function
     const payload = {
       mission_id: missionIdToUse,
       task_id: taskIdToUse,
-      deposit_code: depositCodeToUse,
+      deposit_code: originDeposit,
       sku_code: skuCodeToUse,
       counted_quantity: countedQty,
-      system_quantity: systemQty, // <--- ¡ESTA ERA LA PIEZA FALTANTE!
+      system_quantity: finalSystemQty, // ¡Este es el real en vivo!
       sales_during_audit: salesQty,
-      user_id: user.id 
+      user_id: user.id,
+      target_deposit: targetDeposit,
+      target_system_quantity: targetSysQty
     };
 
     // 4. Estrategia de Envío asíncrono
     try {
       if (isOnline && isSupabaseConfigured) {
-        // SOLUCIÓN CQRS: Llamar a la API. Si falla, encolar. JAMÁS mutar la DB directo.
         const { error } = await supabase.functions.invoke('register-count', {
           body: payload,
         });
@@ -391,7 +440,7 @@ export const TabCollector: React.FC<TabCollectorProps> = ({ onNavigateToFloor })
         showToastBanner(`Conteo exacto registrado (${countedQty} u)`, 'success');
       } else {
         showToastBanner(
-          `Discrepancia detectada (${discrepancy > 0 ? `+${discrepancy}` : discrepancy} u). Pasó a Piso de Venta (150103)`,
+          `Discrepancia detectada (${discrepancy > 0 ? `+${discrepancy}` : discrepancy} u). Pasó a validación en Dep. ${targetDeposit}`,
           'warning',
           discrepancy
         );
@@ -409,7 +458,9 @@ export const TabCollector: React.FC<TabCollectorProps> = ({ onNavigateToFloor })
 
   return (
     <div className="space-y-4 max-w-4xl mx-auto w-full">
+      {/* 1. VIEWPORT DE CÁMARA Y ENTRADA HÍBRIDA */}
       <div className="bg-slate-800 border-2 border-slate-700 focus-within:border-blue-500 rounded-2xl p-3 sm:p-4 shadow-xl transition space-y-3">
+        {/* Cabecera de Escáner y Conectividad */}
         <div className="flex items-center justify-between">
           <label className="text-xs sm:text-sm font-black text-slate-200 uppercase tracking-wider flex items-center gap-2">
             <Barcode className="w-5 h-5 text-blue-400" />
@@ -426,6 +477,7 @@ export const TabCollector: React.FC<TabCollectorProps> = ({ onNavigateToFloor })
               </span>
             )}
 
+            {/* Botón para Abrir / Cerrar Cámara */}
             <button
               type="button"
               onClick={toggleCamera}
@@ -451,6 +503,7 @@ export const TabCollector: React.FC<TabCollectorProps> = ({ onNavigateToFloor })
           </div>
         </div>
 
+        {/* Viewport Centrado de Cámara con Retícula Verde y Flash Toggle */}
         <div
           className={`relative overflow-hidden rounded-xl bg-black border-2 transition-all ${
             isCameraActive || isCameraStarting
@@ -458,19 +511,23 @@ export const TabCollector: React.FC<TabCollectorProps> = ({ onNavigateToFloor })
               : 'hidden border-slate-700'
           }`}
         >
+          {/* Contenedor del elemento de video montado por html5-qrcode */}
           <div
             id={VIEWPORT_ID}
             className="w-full max-h-[320px] mx-auto bg-black flex items-center justify-center min-h-[220px]"
           />
 
+          {/* Retícula Verde Indicadora de Escaneo */}
           {isCameraActive && (
             <div className="pointer-events-none absolute inset-0 flex items-center justify-center p-4">
               <div className="relative w-64 sm:w-72 h-36 sm:h-44 border-2 border-[#009045] rounded-xl shadow-[0_0_15px_rgba(0,144,69,0.5)]">
+                {/* Esquinas Reforzadas de Retícula Verde */}
                 <span className="absolute -top-1 -left-1 w-4 h-4 border-t-4 border-l-4 border-[#009045]" />
                 <span className="absolute -top-1 -right-1 w-4 h-4 border-t-4 border-r-4 border-[#009045]" />
                 <span className="absolute -bottom-1 -left-1 w-4 h-4 border-b-4 border-l-4 border-[#009045]" />
                 <span className="absolute -bottom-1 -right-1 w-4 h-4 border-b-4 border-r-4 border-[#009045]" />
 
+                {/* Línea Láser Animada de Escaneo */}
                 <div className="w-full h-0.5 bg-[#009045] shadow-[0_0_8px_#009045] absolute top-1/2 -translate-y-1/2 animate-pulse" />
 
                 <div className="absolute bottom-2 inset-x-0 text-center">
@@ -482,6 +539,7 @@ export const TabCollector: React.FC<TabCollectorProps> = ({ onNavigateToFloor })
             </div>
           )}
 
+          {/* Barra de Control Superpuesta en Cámara (Flash Toggle & Cerrar) */}
           {isCameraActive && (
             <div className="absolute top-2 right-2 flex items-center gap-1.5 z-10">
               <button
@@ -508,6 +566,7 @@ export const TabCollector: React.FC<TabCollectorProps> = ({ onNavigateToFloor })
             </div>
           )}
 
+          {/* Indicador de Ayuda del Escáner */}
           {isCameraActive && (
             <div className="bg-slate-900/90 py-1.5 px-3 text-center border-t border-slate-800">
               <p className="text-[11px] text-slate-300 flex items-center justify-center gap-1.5">
@@ -518,6 +577,7 @@ export const TabCollector: React.FC<TabCollectorProps> = ({ onNavigateToFloor })
           )}
         </div>
 
+        {/* Mensaje de Error en Cámara si ocurre */}
         {cameraError && (
           <div className="p-3 bg-rose-950/70 border border-rose-600 rounded-xl text-xs text-rose-200 flex items-center gap-2">
             <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
@@ -525,6 +585,7 @@ export const TabCollector: React.FC<TabCollectorProps> = ({ onNavigateToFloor })
           </div>
         )}
 
+        {/* PANEL DE ESTADÍSTICAS EN TIEMPO REAL */}
         {totalSkus > 0 && (
           <div className="bg-slate-900/80 p-3 sm:p-4 rounded-xl border border-slate-700/80 shadow-inner space-y-2.5 my-3 animate-fadeIn">
             <div className="flex items-center justify-between">
@@ -537,6 +598,7 @@ export const TabCollector: React.FC<TabCollectorProps> = ({ onNavigateToFloor })
               </span>
             </div>
 
+            {/* Barra Visual de Progreso */}
             <div className="w-full bg-slate-800 h-2 sm:h-2.5 rounded-full overflow-hidden">
               <div
                 className="bg-gradient-to-r from-emerald-500 to-[#009045] h-full transition-all duration-500 rounded-full"
@@ -544,6 +606,7 @@ export const TabCollector: React.FC<TabCollectorProps> = ({ onNavigateToFloor })
               />
             </div>
 
+            {/* Cuadrícula de Métricas de Alto Contraste */}
             <div className="grid grid-cols-4 gap-2 pt-1 text-center">
               <div className="bg-slate-950/60 p-2 rounded-lg border border-slate-800 flex flex-col justify-center">
                 <span className="block text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-wider">Total</span>
@@ -565,6 +628,7 @@ export const TabCollector: React.FC<TabCollectorProps> = ({ onNavigateToFloor })
           </div>
         )}
 
+        {/* INPUT HÍBRIDO PERMANENTE */}
         <form onSubmit={handleBarcodeSubmit} className="flex gap-2">
           <div className="relative flex-1">
             <Search className="w-5 h-5 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
@@ -602,6 +666,7 @@ export const TabCollector: React.FC<TabCollectorProps> = ({ onNavigateToFloor })
           </button>
         </form>
 
+        {/* Guía Visual Dinámica de Normalización LPAD (6 Dígitos) */}
         {searchTerm && /^\d{1,5}$/.test(searchTerm.trim()) && (
           <p className="text-xs font-mono text-emerald-400 flex items-center gap-1.5 pl-1">
             <Zap className="w-3.5 h-3.5 text-emerald-400" />
@@ -613,8 +678,10 @@ export const TabCollector: React.FC<TabCollectorProps> = ({ onNavigateToFloor })
         )}
       </div>
 
+      {/* 2. FORMULARIO TÁCTIL DE CONTEO */}
       {activeTask ? (
         <div className="bg-slate-800/95 border-2 border-blue-500/80 rounded-2xl p-4 sm:p-6 shadow-2xl space-y-5 animate-fadeIn">
+          {/* Cabecera del Artículo */}
           <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 pb-4 border-b border-slate-700/80">
             <div>
               <div className="flex flex-wrap items-center gap-2">
@@ -622,9 +689,14 @@ export const TabCollector: React.FC<TabCollectorProps> = ({ onNavigateToFloor })
                   SKU: {activeTask.SkuCode || activeTask.skuCode}
                 </span>
                 <span className="text-xs font-semibold text-slate-400">
-                  Depósito {activeTask.DepositCode || activeTask.depositCode || '150101'}
+                  Dep. Origen: {activeTask.DepositCode || activeTask.depositCode || '150101'}
                 </span>
-                <span className="text-xs font-semibold text-slate-400">
+                {liveData.targetDeposit && (
+                  <span className="text-xs font-semibold text-amber-400/80">
+                    Dep. Destino: {liveData.targetDeposit}
+                  </span>
+                )}
+                <span className="text-xs font-semibold text-emerald-400">
                   Costo: ${Number(activeTask.Cost || activeTask.cost || 0).toFixed(2)}
                 </span>
               </div>
@@ -632,6 +704,7 @@ export const TabCollector: React.FC<TabCollectorProps> = ({ onNavigateToFloor })
                 {activeTask.SkuDescription || activeTask.skuDescription}
               </h2>
 
+              {/* Lista de Códigos de Barra asociados */}
               {(activeTask.Barcodes || activeTask.barcodes) && (activeTask.Barcodes || activeTask.barcodes).length > 0 && (
                 <div className="flex items-center gap-2 mt-2 flex-wrap">
                   <span className="text-[11px] text-slate-400 font-semibold uppercase">EAN/UPC:</span>
@@ -656,15 +729,16 @@ export const TabCollector: React.FC<TabCollectorProps> = ({ onNavigateToFloor })
             </button>
           </div>
 
+          {/* Grid de Ecuación Teórica de Inventario (S, V, S - V) */}
           <div className="grid grid-cols-3 gap-2.5 sm:gap-3 bg-slate-950/80 p-3 sm:p-4 rounded-xl border border-slate-700/80 text-center">
             <div className="p-2 bg-slate-900/60 rounded-lg">
-              <span className="text-[10px] sm:text-xs text-slate-400 uppercase font-black block tracking-wider">
-                Sistema (S)
+              <span className="text-[10px] sm:text-xs text-slate-400 uppercase font-black block tracking-wider flex items-center justify-center gap-1">
+                Sistema (S) {isLiveFetching && <RefreshCw className="w-3 h-3 animate-spin text-blue-400" />}
               </span>
-              <span className="text-xl sm:text-2xl font-black text-white font-mono mt-1 block">
-                {systemQty.toFixed(2)}
+              <span className={`text-xl sm:text-2xl font-black font-mono mt-1 block transition-colors ${isLiveFetching ? 'text-slate-600' : 'text-white'}`}>
+                {finalSystemQty.toFixed(2)}
               </span>
-              <span className="text-[10px] text-slate-500">Unidades base</span>
+              <span className="text-[10px] text-blue-400 font-bold">{isLiveFetching ? 'Consultando API...' : liveData.systemQty !== null ? 'Dato en vivo ERP' : 'Dato almacenado'}</span>
             </div>
 
             <div className="p-2 bg-slate-900/60 rounded-lg">
@@ -688,6 +762,7 @@ export const TabCollector: React.FC<TabCollectorProps> = ({ onNavigateToFloor })
             </div>
           </div>
 
+          {/* Campo Numérico Gigante para "Cantidad Contada Físicamente" */}
           <div className="space-y-2">
             <label className="text-xs sm:text-sm font-black text-slate-200 uppercase tracking-wider flex items-center justify-between">
               <span>CANTIDAD CONTADA FÍSICAMENTE (Qc)</span>
@@ -702,57 +777,66 @@ export const TabCollector: React.FC<TabCollectorProps> = ({ onNavigateToFloor })
                 min="0"
                 value={countedInput}
                 onChange={(e) => setCountedInput(e.target.value)}
+                disabled={isLiveFetching}
                 placeholder="0.00"
-                className="w-full h-20 sm:h-24 px-4 bg-slate-950 border-3 border-[#009045] focus:border-emerald-400 rounded-2xl text-white font-mono text-3xl sm:text-5xl font-black text-center shadow-inner focus:outline-hidden"
+                className="w-full h-20 sm:h-24 px-4 bg-slate-950 border-3 border-[#009045] disabled:opacity-50 focus:border-emerald-400 rounded-2xl text-white font-mono text-3xl sm:text-5xl font-black text-center shadow-inner focus:outline-hidden"
               />
             </div>
 
+            {/* Teclado de Incrementos Rápidos Táctiles */}
             <div className="grid grid-cols-6 gap-2 pt-1">
               <button
                 type="button"
                 onClick={() => adjustCount(1)}
-                className="btn-collector bg-slate-700 hover:bg-slate-600 text-white min-h-[48px] rounded-xl font-black text-base active:scale-95"
+                disabled={isLiveFetching}
+                className="btn-collector bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-white min-h-[48px] rounded-xl font-black text-base active:scale-95"
               >
                 +1
               </button>
               <button
                 type="button"
                 onClick={() => adjustCount(5)}
-                className="btn-collector bg-slate-700 hover:bg-slate-600 text-white min-h-[48px] rounded-xl font-black text-base active:scale-95"
+                disabled={isLiveFetching}
+                className="btn-collector bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-white min-h-[48px] rounded-xl font-black text-base active:scale-95"
               >
                 +5
               </button>
               <button
                 type="button"
                 onClick={() => adjustCount(10)}
-                className="btn-collector bg-slate-700 hover:bg-slate-600 text-white min-h-[48px] rounded-xl font-black text-base active:scale-95"
+                disabled={isLiveFetching}
+                className="btn-collector bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-white min-h-[48px] rounded-xl font-black text-base active:scale-95"
               >
                 +10
               </button>
               <button
                 type="button"
                 onClick={() => adjustCount(25)}
-                className="btn-collector bg-slate-700 hover:bg-slate-600 text-white min-h-[48px] rounded-xl font-black text-base active:scale-95"
+                disabled={isLiveFetching}
+                className="btn-collector bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-white min-h-[48px] rounded-xl font-black text-base active:scale-95"
               >
                 +25
               </button>
               <button
                 type="button"
                 onClick={() => adjustCount(-1)}
-                className="btn-collector bg-slate-700 hover:bg-slate-600 text-white min-h-[48px] rounded-xl font-black text-base active:scale-95"
+                disabled={isLiveFetching}
+                className="btn-collector bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-white min-h-[48px] rounded-xl font-black text-base active:scale-95"
               >
                 -1
               </button>
               <button
                 type="button"
                 onClick={() => setCountedInput('')}
-                className="btn-collector bg-rose-950/80 hover:bg-rose-900 border border-rose-700 text-rose-300 min-h-[48px] rounded-xl font-bold text-xs active:scale-95"
+                disabled={isLiveFetching}
+                className="btn-collector bg-rose-950/80 hover:bg-rose-900 disabled:opacity-50 border border-rose-700 text-rose-300 min-h-[48px] rounded-xl font-bold flex items-center justify-center text-xs active:scale-95"
               >
                 <RotateCcw className="w-4 h-4" />
               </button>
             </div>
           </div>
 
+          {/* Campo de Ventas Durante Auditoría */}
           <div>
             <label className="block text-xs font-bold text-slate-300 mb-1.5 flex items-center justify-between">
               <span>VENTAS REGISTRADAS DURANTE LA AUDITORÍA:</span>
@@ -764,11 +848,13 @@ export const TabCollector: React.FC<TabCollectorProps> = ({ onNavigateToFloor })
               min="0"
               value={salesInput}
               onChange={(e) => setSalesInput(e.target.value)}
-              className="w-full h-12 px-4 bg-slate-900 border border-slate-700 rounded-xl text-amber-300 font-mono text-xl font-black text-center focus:outline-hidden focus:border-amber-500"
+              disabled={isLiveFetching}
+              className="w-full h-12 px-4 bg-slate-900 border border-slate-700 disabled:opacity-50 rounded-xl text-amber-300 font-mono text-xl font-black text-center focus:outline-hidden focus:border-amber-500"
             />
           </div>
 
-          {isCountValid && (
+          {/* Banner de Previsualización Dinámica del Resultado */}
+          {isCountValid && !isLiveFetching && (
             <div
               className={`p-4 rounded-xl border-2 flex items-center justify-between transition ${
                 isExactMatch
@@ -790,8 +876,8 @@ export const TabCollector: React.FC<TabCollectorProps> = ({ onNavigateToFloor })
                     {isExactMatch
                       ? 'El conteo físico coincide al 100% con el teórico ajustado.'
                       : liveDiscrepancy < 0
-                      ? `Faltante de ${Math.abs(liveDiscrepancy).toFixed(2)} unidades en almacén.`
-                      : `Sobrante de ${liveDiscrepancy.toFixed(2)} unidades en almacén.`}
+                      ? `Faltante de ${Math.abs(liveDiscrepancy).toFixed(2)} unidades en origen.`
+                      : `Sobrante de ${liveDiscrepancy.toFixed(2)} unidades en origen.`}
                   </span>
                 </div>
               </div>
@@ -805,25 +891,28 @@ export const TabCollector: React.FC<TabCollectorProps> = ({ onNavigateToFloor })
             </div>
           )}
 
+          {/* BOTÓN DE GUARDADO RÁPIDO */}
           <button
             onClick={handleRegisterCount}
-            disabled={!isCountValid || isSubmitting}
+            disabled={!isCountValid || isSubmitting || isLiveFetching}
             className="w-full min-h-[58px] bg-[#009045] hover:bg-[#007a3a] disabled:opacity-50 disabled:pointer-events-none active:scale-[0.98] text-white font-black text-lg sm:text-xl rounded-2xl shadow-xl shadow-emerald-900/40 flex items-center justify-center gap-3 transition touch-manipulation"
           >
-            <CheckCircle2 className="w-6 h-6" />
-            <span>{isSubmitting ? 'REGISTRANDO...' : 'REGISTRAR CONTEO'}</span>
+            {isLiveFetching ? <RefreshCw className="w-6 h-6 animate-spin" /> : <CheckCircle2 className="w-6 h-6" />}
+            <span>{isLiveFetching ? 'ESPERANDO ERP...' : isSubmitting ? 'REGISTRANDO...' : 'REGISTRAR CONTEO'}</span>
           </button>
         </div>
       ) : (
+        /* Estado Vacío - Esperando Escaneo */
         <div className="bg-slate-800/40 border-2 border-dashed border-slate-700 rounded-2xl p-8 sm:p-12 text-center text-slate-400 space-y-3">
           <div className="w-16 h-16 rounded-2xl bg-emerald-600/10 border border-emerald-500/20 text-[#009045] flex items-center justify-center mx-auto">
             <Barcode className="w-9 h-9" />
           </div>
-          <h3 className="text-lg font-bold text-slate-200">Listo para escanear en Almacén</h3>
+          <h3 className="text-lg font-bold text-slate-200">Listo para escanear</h3>
           <p className="text-xs sm:text-sm text-slate-400 max-w-md mx-auto leading-relaxed">
             Active el visor de cámara para escanear con la retícula verde o apunte su colector industrial hacia el código de barras.
           </p>
 
+          {/* Acceso Rápido a Tareas Pendientes si existen */}
           {tasks.length > 0 && (
             <div className="pt-4 border-t border-slate-800 text-left max-w-lg mx-auto">
               <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-2">
@@ -848,6 +937,7 @@ export const TabCollector: React.FC<TabCollectorProps> = ({ onNavigateToFloor })
         </div>
       )}
 
+      {/* TOAST FLOTANTE NO BLOQUEANTE */}
       {toast && (
         <div
           className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-4 py-3.5 rounded-2xl shadow-2xl text-xs sm:text-sm font-bold flex items-center justify-between gap-3 max-w-md w-[92%] border backdrop-blur-md animate-slideUp ${
@@ -870,7 +960,7 @@ export const TabCollector: React.FC<TabCollectorProps> = ({ onNavigateToFloor })
               onClick={onNavigateToFloor}
               className="underline text-[11px] font-black text-amber-900 hover:text-black shrink-0 ml-2 uppercase"
             >
-              Ir a Piso &rarr;
+              Ir al Destino &rarr;
             </button>
           )}
         </div>

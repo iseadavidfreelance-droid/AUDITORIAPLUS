@@ -1,6 +1,6 @@
 import { createClient } from "npm:@supabase/supabase-js@2.39.3";
 
-console.log("🟢 [1] ISOLATE INICIADO EN DENO 2.1.4 (VERSION BIDIRECCIONAL)");
+console.log("🟢 [1] ISOLATE INICIADO EN DENO 2.1.4 (VERSION BIDIRECCIONAL + LIVE API)");
 
 Deno.serve(async (req) => {
   const origin = req.headers.get('Origin') || '*';
@@ -20,22 +20,28 @@ Deno.serve(async (req) => {
   try {
     const bodyText = await req.text();
     const body = JSON.parse(bodyText);
-    const { mission_id, task_id, deposit_code, sku_code, counted_quantity, system_quantity, sales_during_audit, user_id } = body;
+    
+    // EXTRAEMOS LOS NUEVOS DATOS ENVIADOS POR EL INTERCEPTOR
+    const { 
+      mission_id, task_id, deposit_code, sku_code, 
+      counted_quantity, system_quantity, sales_during_audit, user_id,
+      target_deposit, target_system_quantity 
+    } = body;
 
     const url = Deno.env.get('SUPABASE_URL') || '';
     const key = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
     const supabaseClient = createClient(url, key);
 
-    // BLINDAJE MATEMÁTICO: Si llega undefined, se convierte en 0 automáticamente.
+    // BLINDAJE MATEMÁTICO
     const safeCounted = Number(counted_quantity) || 0;
     const safeSystem = Number(system_quantity) || 0;
     const safeSales = Number(sales_during_audit) || 0;
+    const safeTargetSystem = Number(target_system_quantity) || 0;
     
-    // Cálculo seguro (Jamás será NaN ni null)
     const calculated_discrepancy = safeCounted - (safeSystem - safeSales);
 
-    // INTELIGENCIA BIDIRECCIONAL: Deducir el destino basado en el origen
-    const target_deposit = deposit_code === '150101' ? '150103' : '150101';
+    // Deducir destino por seguridad si no viene en el payload
+    const final_target_deposit = target_deposit || (deposit_code === '150101' ? '150103' : '150101');
 
     const payloadToInsert = {
       AggregateId: task_id,
@@ -50,7 +56,7 @@ Deno.serve(async (req) => {
         sales_during_audit: safeSales, 
         calculated_discrepancy
       },
-      Metadata: { client: "PWA_AuditoriaPlus_V6_Agnostic" }
+      Metadata: { client: "PWA_AuditoriaPlus_Interceptor_Live" }
     };
 
     const { data, error } = await supabaseClient.from('EventStore').insert(payloadToInsert).select();
@@ -65,15 +71,15 @@ Deno.serve(async (req) => {
           EventType: 'DiscrepancyDetected',
           UserId: user_id,
           CorrelationId: crypto.randomUUID(),
-          // ESTRUCTURA CORREGIDA: Todo va dentro de Payload
           Payload: {
             discrepancy_id: crypto.randomUUID(),
             mission_id: mission_id,
             origin_deposit: deposit_code,
-            target_deposit: target_deposit,
+            target_deposit: final_target_deposit,
             sku_code: sku_code,
             sku_description: "SKU " + sku_code,
             origin_discrepancy: calculated_discrepancy,
+            target_system_quantity: safeTargetSystem, // <-- AHORA INYECTA EL STOCK DEL DESTINO EN VIVO
             status: "PENDING_TARGET_COUNT"
           },
           Metadata: { trigger: "auto_discrepancy" }
