@@ -21,7 +21,8 @@ import {
   User,
   Fingerprint,
   ShieldCheck,
-  ArrowRight
+  ArrowRight,
+  Database // INYECTADO PARA EL NUEVO BOTÓN
 } from 'lucide-react';
 import { Session } from '@supabase/supabase-js';
 import { supabase, isSupabaseConfigured, checkSupabaseConnection } from './lib/supabase';
@@ -35,12 +36,10 @@ import { TabFloorReconciliation } from './components/TabFloorReconciliation';
 import { TabReports } from './components/TabReports';
 import { getOfflineQueueCount } from './lib/db';
 import { processOfflineQueue, subscribeToSync } from './lib/sync';
-// NUEVO: Importación del store de autenticación
 import { useAuthStore } from './stores/useAuthStore';
 
 type ActiveTab = 'ingestion' | 'mission' | 'discrepancies' | 'reports';
 
-// DEFINICIÓN ESTÁTICA DE USUARIOS DEL QUIOSCO (Actualizado con la contraseña maestra)
 const KIOSK_USERS = [
   { name: 'David', email: 'david@maraplus.local', pass: '123456', icon: ShieldCheck, color: 'text-blue-400', bg: 'bg-blue-500/10' },
   { name: 'Franyelin', email: 'franyelin@maraplus.local', pass: '123456', icon: User, color: 'text-emerald-400', bg: 'bg-emerald-500/10' },
@@ -48,21 +47,18 @@ const KIOSK_USERS = [
 ];
 
 export default function App() {
-  // ESTADOS DE AUTENTICACIÓN
   const [session, setSession] = useState<Session | null>(null);
   const [userRole, setUserRole] = useState<'admin' | 'auditor' | null>(null);
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [loginError, setLoginError] = useState<string | null>(null);
 
-  // NUEVO: Instancia del Store de Auth
   const { setAuth } = useAuthStore();
-
   const isOnline = useOnlineStatus();
   const [activeTab, setActiveTab] = useState<ActiveTab>('mission');
   const [, startTransition] = useTransition();
 
-  // Stores
+  // Stores con las nuevas variables de FASE 2 inyectadas
   const {
     activeMissionId,
     activeMission,
@@ -71,6 +67,9 @@ export default function App() {
     fetchMissionTasks,
     setActiveMissionId,
     setActiveMission,
+    isEnriching,          // NUEVO
+    enrichProgress,       // NUEVO
+    runMissionEnrichment  // NUEVO
   } = useMissionStore();
 
   const {
@@ -78,7 +77,6 @@ export default function App() {
     setPendingDiscrepancies,
   } = useDiscrepancyStore();
 
-  // Estados locales de control y sincronización
   const [dbStatus, setDbStatus] = useState<{ connected: boolean; latencyMs: number; error?: string }>({
     connected: false,
     latencyMs: 0,
@@ -90,16 +88,13 @@ export default function App() {
     type: 'success' | 'warning' | 'error';
   } | null>(null);
 
-  // Ref para evitar rebotes infinitos al emitir la misión global
   const lastBroadcastedMissionRef = useRef<string | null>(null);
 
-  // Función inteligente para cambiar de pestaña y guardar en memoria local
   const changeTab = (tab: ActiveTab) => {
     setActiveTab(tab);
     localStorage.setItem('auditoria_active_tab', tab); 
   };
 
-  // Consultar Rol Oficial en la Base de Datos
   const fetchUserRole = async (userId: string) => {
     try {
       const { data } = await supabase
@@ -111,7 +106,6 @@ export default function App() {
       const role = data?.Role || 'auditor';
       setUserRole(role);
       
-      // Al iniciar o recargar (F5), cargar la pestaña donde el usuario estaba
       const savedTab = localStorage.getItem('auditoria_active_tab') as ActiveTab;
       if (savedTab) {
         setActiveTab(savedTab);
@@ -125,11 +119,10 @@ export default function App() {
     }
   };
 
-  // Verificación de Sesión Inicial (Integrado con Zustand)
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
-      setAuth(session?.user || null, session); // GUARDA EN EL STORE GLOBAL
+      setAuth(session?.user || null, session); 
       if (session?.user) {
         fetchUserRole(session.user.id).then(() => setIsCheckingAuth(false));
       } else {
@@ -139,7 +132,7 @@ export default function App() {
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
-      setAuth(session?.user || null, session); // GUARDA EN EL STORE GLOBAL
+      setAuth(session?.user || null, session); 
       if (session?.user) {
         fetchUserRole(session.user.id).then(() => setIsCheckingAuth(false));
       } else {
@@ -151,7 +144,6 @@ export default function App() {
     return () => subscription.unsubscribe();
   }, [setAuth]);
 
-  // 1. Verificación de Conectividad periódica y escucha de eventos de la cola offline
   const refreshConnectionAndQueue = async () => {
     if (!session) return;
     const status = await checkSupabaseConnection();
@@ -167,9 +159,7 @@ export default function App() {
           .eq('IsGlobalActive', true)
           .maybeSingle();
 
-        if (data && data.MissionId !== activeMissionId) {
-          lastBroadcastedMissionRef.current = data.MissionId;
-          setActiveMissionId(data.MissionId);
+        if (data) {
           setActiveMission({
             missionId: data.MissionId,
             name: data.Name,
@@ -177,12 +167,17 @@ export default function App() {
             totalSkus: data.TotalSkus,
             countedSkus: data.CountedSkus,
             pendingSkus: data.PendingSkus,
-            discrepantSkus: data.DiscrepantSkus,
+            discrepantSkus: data.DiscrepantSkus, 
             reconciledSkus: data.ReconciledSkus,
             status: data.Status
           });
-          await fetchMissionTasks(data.MissionId);
-          showToast(`Misión Anclada: ${data.Name}`, 'success');
+
+          if (data.MissionId !== activeMissionId) {
+            lastBroadcastedMissionRef.current = data.MissionId;
+            setActiveMissionId(data.MissionId);
+            await fetchMissionTasks(data.MissionId);
+            showToast(`Misión Anclada: ${data.Name}`, 'success');
+          }
         }
       } catch (err) {
         console.warn('Error validando misión global', err);
@@ -211,7 +206,6 @@ export default function App() {
     };
   }, [activeMissionId, fetchMissionTasks, session, isOnline]);
 
-  // TRANSMISOR GLOBAL (Solo Admin)
   useEffect(() => {
     if (userRole === 'admin' && activeMissionId && activeMissionId !== lastBroadcastedMissionRef.current && isOnline) {
       const broadcastMissionToAll = async () => {
@@ -228,7 +222,6 @@ export default function App() {
     }
   }, [activeMissionId, userRole, isOnline]);
 
-  // 2. Listener global para el evento `online` del navegador
   useEffect(() => {
     if (!session) return;
     const handleOnline = async () => {
@@ -253,7 +246,6 @@ export default function App() {
     return () => window.removeEventListener('online', handleOnline);
   }, [activeMissionId, fetchMissionTasks, session]);
 
-  // 3. Forzar sincronización manual desde la barra superior
   const handleManualSync = async () => {
     if (!isOnline) {
       showToast('Sin conexión a Internet para sincronizar', 'warning');
@@ -284,7 +276,6 @@ export default function App() {
     setTimeout(() => setToastMessage(null), 4000);
   };
 
-  // LOGIN MODO QUIOSCO (1 Clic)
   const handleQuickLogin = async (email: string, pass: string) => {
     setIsLoggingIn(true);
     setLoginError(null);
@@ -293,7 +284,6 @@ export default function App() {
     setIsLoggingIn(false);
   };
 
-  // LOGOUT
   const handleLogout = async () => {
     await supabase.auth.signOut();
     localStorage.removeItem('auditoria_active_tab'); 
@@ -307,7 +297,6 @@ export default function App() {
     );
   }
 
-  // PANTALLA DE LOGIN MODO QUIOSCO (SIN SESIÓN)
   if (!session) {
     return (
       <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center p-4 selection:bg-emerald-600 selection:text-white">
@@ -350,7 +339,6 @@ export default function App() {
     );
   }
 
-  // APLICACIÓN PRINCIPAL (CON SESIÓN ACTIVA)
   return (
     <div className="min-h-screen bg-slate-900 text-slate-100 flex flex-col font-sans pb-24 antialiased selection:bg-blue-600 selection:text-white">
       <header className="sticky top-0 z-40 bg-slate-900/95 backdrop-blur-md border-b border-slate-800 px-3 sm:px-5 py-2.5 shadow-lg">
@@ -371,13 +359,25 @@ export default function App() {
 
               <div className="flex items-center gap-1.5 mt-0.5">
                 {activeMissionId ? (
-                  <button
-                    onClick={() => userRole === 'admin' && changeTab('ingestion')}
-                    className={`text-[11px] font-mono font-bold flex items-center gap-1 transition ${userRole === 'admin' ? 'text-emerald-400 hover:text-emerald-300' : 'text-emerald-400 cursor-default'}`}
-                  >
-                    <span>Misión: {activeMissionId.slice(0, 8)}</span>
-                    {userRole === 'admin' && <ChevronRight className="w-3 h-3 text-slate-500" />}
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => userRole === 'admin' && changeTab('ingestion')}
+                      className={`text-[11px] font-mono font-bold flex items-center gap-1 transition ${userRole === 'admin' ? 'text-emerald-400 hover:text-emerald-300' : 'text-emerald-400 cursor-default'}`}
+                    >
+                      <span>Misión: {activeMissionId.slice(0, 8)}</span>
+                      {userRole === 'admin' && <ChevronRight className="w-3 h-3 text-slate-500" />}
+                    </button>
+
+                    {/* BOTÓN FASE 2: INICIAR ENRIQUECIMIENTO (SOLO ADMIN) */}
+                    {userRole === 'admin' && !isEnriching && (
+                      <button
+                        onClick={() => runMissionEnrichment(activeMissionId, activeMission?.DepositCode || activeMission?.depositCode || '150101')}
+                        className="bg-blue-600/20 hover:bg-blue-600 border border-blue-500/50 text-blue-300 hover:text-white px-2 py-0.5 rounded text-[9px] uppercase transition flex items-center"
+                      >
+                        <Database className="w-3 h-3 mr-1" /> Extraer de API
+                      </button>
+                    )}
+                  </div>
                 ) : (
                   <button
                     onClick={() => userRole === 'admin' && changeTab('ingestion')}
@@ -426,6 +426,29 @@ export default function App() {
           </div>
         </div>
       </header>
+
+      {/* --- FASE 2: BARRA DE PROGRESO DE EXTRACCIÓN API --- */}
+      {isEnriching && (
+        <div className="w-full bg-blue-950 border-b border-blue-800 px-4 py-3 sticky top-[60px] z-30 shadow-md animate-slideDown">
+          <div className="max-w-5xl mx-auto">
+            <div className="flex justify-between items-end mb-2">
+              <span className="text-[11px] sm:text-xs font-black text-blue-300 tracking-widest flex items-center gap-2">
+                <RefreshCw className="w-3.5 h-3.5 sm:w-4 sm:h-4 animate-spin text-blue-400" />
+                VALIDANDO DATOS CONTRA MARAPLUS PORTAL...
+              </span>
+              <span className="text-[11px] sm:text-xs font-mono font-bold text-blue-200">
+                {enrichProgress.current} / {enrichProgress.total} SKUs
+              </span>
+            </div>
+            <div className="w-full bg-blue-900/50 h-2 sm:h-2.5 rounded-full overflow-hidden border border-blue-800/50">
+              <div
+                className="bg-gradient-to-r from-blue-500 to-blue-300 h-full transition-all duration-300 shadow-[0_0_10px_rgba(59,130,246,0.5)]"
+                style={{ width: `${enrichProgress.total > 0 ? (enrichProgress.current / enrichProgress.total) * 100 : 0}%` }}
+              />
+            </div>
+          </div>
+        </div>
+      )}
 
       <main className="flex-1 p-3 sm:p-5 max-w-5xl mx-auto w-full space-y-4">
         {activeTab === 'ingestion' && userRole === 'admin' && (

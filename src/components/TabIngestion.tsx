@@ -1,6 +1,6 @@
 /**
  * AUDITORIAPLUS+ - Tab Ingesta de Misiones y Dashboard de Auditorías
- * Carga directa de archivos Excel/CSV hacia Supabase Edge Function 'ingest-excel'.
+ * Carga directa de un único archivo Excel (Kardex) hacia Supabase Edge Function 'ingest-excel'.
  * Lectura en tiempo real de Read_Missions y selección de misión activa.
  * REGLA DE ORO: Cero datos mock o simulados. Conexión 100% real a PostgreSQL.
  */
@@ -20,7 +20,8 @@ import {
   Hash,
   Database,
   Check,
-  AlertCircle
+  AlertCircle,
+  Trash2 // Asegurado de que Trash2 esté importado
 } from 'lucide-react';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import { useMissionStore } from '../store/useMissionStore';
@@ -59,9 +60,8 @@ export const TabIngestion: React.FC<TabIngestionProps> = ({ onMissionSelected })
     isOnline,
   } = useMissionStore();
 
-  // Estados de Ingesta BLINDADOS (2 archivos separados)
+  // Estados de Ingesta BLINDADOS (AHORA 1 SOLO ARCHIVO KARDEX)
   const [fileA, setFileA] = useState<File | null>(null);
-  const [fileB, setFileB] = useState<File | null>(null);
   const [missionName, setMissionName] = useState<string>('');
   const [depositCode, setDepositCode] = useState<DepositCode>('150101');
   const [isUploading, setIsUploading] = useState<boolean>(false);
@@ -79,7 +79,6 @@ export const TabIngestion: React.FC<TabIngestionProps> = ({ onMissionSelected })
   const [missionsError, setMissionsError] = useState<string | null>(null);
 
   const fileInputARef = useRef<HTMLInputElement>(null);
-  const fileInputBRef = useRef<HTMLInputElement>(null);
 
   // 1. Cargar misiones reales desde Read_Missions en Supabase
   const loadMissions = async () => {
@@ -124,7 +123,6 @@ export const TabIngestion: React.FC<TabIngestionProps> = ({ onMissionSelected })
       setFileA(selectedFile);
       setUploadResult(null);
 
-      // Sugerir nombre de misión a partir del archivo A si está vacío
       if (!missionName) {
         const nameWithoutExt = selectedFile.name.replace(/\.[^/.]+$/, '').replace(/[_-]/g, ' ');
         setMissionName(`Auditoría ${nameWithoutExt}`);
@@ -132,20 +130,13 @@ export const TabIngestion: React.FC<TabIngestionProps> = ({ onMissionSelected })
     }
   };
 
-  const handleFileBChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      setFileB(e.target.files[0]);
-      setUploadResult(null);
-    }
-  };
-
-  // 2. Envío a la Edge Function 'ingest-excel' (BLINDADO CON FETCH NATIVO)
+  // 2. Envío a la Edge Function 'ingest-excel' (BLINDADO CON FETCH NATIVO Y 1 ARCHIVO)
   const handleUpload = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!fileA || !fileB) {
+    if (!fileA) {
       setUploadResult({
         success: false,
-        error: 'Obligatorio: Debes cargar tanto el Archivo A (Taxonomía) como el Archivo B (Costos).',
+        error: 'Obligatorio: Debes cargar el Archivo de Inventario Kardex consolidado.',
       });
       return;
     }
@@ -163,18 +154,13 @@ export const TabIngestion: React.FC<TabIngestionProps> = ({ onMissionSelected })
 
     try {
       const formData = new FormData();
-      // Nombres de parámetros estrictos exigidos por el backend[cite: 3]
       formData.append('file_a', fileA);
-      formData.append('file_b', fileB);
       formData.append('deposit_code', depositCode);
       formData.append(
         'mission_name',
         missionName.trim() || `Auditoría ${new Date().toLocaleDateString('es-ES')}`
       );
 
-      // =====================================================================
-      // SOLUCIÓN 0 INCERTIDUMBRE: BYPASS AL BUG DE SUPABASE-JS CON FETCH NATIVO
-      // =====================================================================
       const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
       const { data: sessionData } = await supabase.auth.getSession();
       const token = sessionData?.session?.access_token || import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -183,17 +169,13 @@ export const TabIngestion: React.FC<TabIngestionProps> = ({ onMissionSelected })
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`
-          // ¡REGLA DE ORO!: NUNCA escribas el 'Content-Type' aquí. 
-          // Al dejarlo vacío, el navegador inyecta el multipart/form-data con los bytes exactos.
         },
         body: formData,
       });
 
-      // Parseamos la respuesta del servidor en Deno
       const responseData = await response.json().catch(() => ({}));
 
       if (!response.ok) {
-        // Si el servidor rechaza la petición (Error 400 o 409)
         const errorMsg =
           response.status === 409
             ? 'Conflicto (409): Esta misión ya ha sido ingerida previamente. El hash SHA-256 es idéntico a una existente.'
@@ -204,7 +186,6 @@ export const TabIngestion: React.FC<TabIngestionProps> = ({ onMissionSelected })
           error: errorMsg,
         });
       } else {
-        // Si el servidor responde con éxito (200 OK / 201 Created)
         const data = responseData;
         const hash = data?.excel_hash || data?.excel_hash_sha256 || data?.data?.excel_hash_sha256 || 'Calculado en backend';
         const newMissionId = data?.mission_id || data?.data?.mission_id;
@@ -217,13 +198,10 @@ export const TabIngestion: React.FC<TabIngestionProps> = ({ onMissionSelected })
           totalTasks: total,
         });
 
-        // Limpiar archivos seleccionados físicamente
+        // Limpiar archivo seleccionado
         setFileA(null);
-        setFileB(null);
         if (fileInputARef.current) fileInputARef.current.value = '';
-        if (fileInputBRef.current) fileInputBRef.current.value = '';
 
-        // Recargar misiones y seleccionar automáticamente si hay ID
         await loadMissions();
         if (newMissionId) {
           await handleSelectMission(newMissionId);
@@ -240,11 +218,27 @@ export const TabIngestion: React.FC<TabIngestionProps> = ({ onMissionSelected })
     }
   };
 
+  // Función de Eliminación añadida
+  const handleDeleteMission = async (missionId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!window.confirm("¿Estás seguro de eliminar esta misión? Esta acción es irreversible.")) return;
+
+    try {
+      await supabase.from('Read_Missions').delete().eq('MissionId', missionId);
+      if (activeMissionId === missionId) {
+        setActiveMissionId(null);
+      }
+      loadMissions();
+    } catch (err) {
+      console.error("Error al eliminar misión:", err);
+      alert("No se pudo eliminar la misión.");
+    }
+  };
+
   // 3. Selección de Misión
   const handleSelectMission = async (missionId: string) => {
     setActiveMissionId(missionId);
 
-    // Buscar en lista local
     const selected = missions.find((m) => m.MissionId === missionId);
     if (selected) {
       const total = Number(selected.TotalSkus || selected.TotalTasks || 0);
@@ -268,7 +262,6 @@ export const TabIngestion: React.FC<TabIngestionProps> = ({ onMissionSelected })
       });
     }
 
-    // Cargar tareas desde Supabase
     await fetchMissionTasks(missionId);
 
     if (onMissionSelected) {
@@ -289,14 +282,13 @@ export const TabIngestion: React.FC<TabIngestionProps> = ({ onMissionSelected })
               Ingesta de Inventario a Supabase
             </h2>
             <p className="text-xs text-slate-400">
-              Carga estrictamente el Archivo A (Taxonomía) y Archivo B (Costos) para inicializar la misión.
+              Carga estrictamente el archivo del Kardex consolidado para inicializar la misión.
             </p>
           </div>
         </div>
 
         <form onSubmit={handleUpload} className="mt-4 space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {/* Selector de Depósito */}
             <div>
               <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1">
                 Depósito a Auditar (Misión Base)
@@ -310,13 +302,13 @@ export const TabIngestion: React.FC<TabIngestionProps> = ({ onMissionSelected })
                 <option value="150101">150101 - Almacén Principal (Origen)</option>
                 <option value="150103">150103 - Piso de Venta (Solo si es misión directa)</option>
                 <option value="150102">150102 - Avería / Merma</option>
+                <option value="150107">150107 - Galpón</option>
               </select>
               <p className="text-[10px] text-slate-500 mt-1">
-                Nota: Faltantes de almacén se arreglan desde Tab 2, no subiendo otro Excel.
+                Nota: El destino de validación cruzada se asignará automáticamente.
               </p>
             </div>
 
-            {/* Nombre de la Misión */}
             <div>
               <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1">
                 Nombre de la Misión
@@ -332,11 +324,10 @@ export const TabIngestion: React.FC<TabIngestionProps> = ({ onMissionSelected })
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
-            {/* Archivo A: Taxonomía */}
+          <div className="pt-2">
             <div className={`p-4 border rounded-xl transition ${fileA ? 'border-emerald-500/50 bg-emerald-950/20' : 'border-slate-700 bg-slate-950/50'}`}>
               <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-2">
-                Archivo A: Taxonomía y EANs
+                Archivo de Inventario (KARDEX / EXCEL)
               </label>
               <input
                 ref={fileInputARef}
@@ -348,25 +339,8 @@ export const TabIngestion: React.FC<TabIngestionProps> = ({ onMissionSelected })
               />
               {fileA && <p className="text-xs text-emerald-400 mt-2 font-medium break-all">{fileA.name}</p>}
             </div>
-
-            {/* Archivo B: Costos */}
-            <div className={`p-4 border rounded-xl transition ${fileB ? 'border-emerald-500/50 bg-emerald-950/20' : 'border-slate-700 bg-slate-950/50'}`}>
-              <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-2">
-                Archivo B: Costos y Stock ERP
-              </label>
-              <input
-                ref={fileInputBRef}
-                type="file"
-                accept=".xlsx,.xls,.csv"
-                onChange={handleFileBChange}
-                disabled={isUploading}
-                className="block w-full text-sm text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-blue-600 file:text-white hover:file:bg-blue-500 cursor-pointer"
-              />
-              {fileB && <p className="text-xs text-emerald-400 mt-2 font-medium break-all">{fileB.name}</p>}
-            </div>
           </div>
 
-          {/* Feedback de Ingesta */}
           {uploadResult && (
             <div
               className={`p-3.5 rounded-xl border text-xs sm:text-sm font-medium ${
@@ -400,16 +374,15 @@ export const TabIngestion: React.FC<TabIngestionProps> = ({ onMissionSelected })
             </div>
           )}
 
-          {/* Botón de Ingesta */}
           <button
             type="submit"
-            disabled={!fileA || !fileB || isUploading}
+            disabled={!fileA || isUploading}
             className="w-full btn-collector bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed text-white min-h-[48px] rounded-xl font-black text-sm flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/20 transition mt-2"
           >
             {isUploading ? (
               <>
                 <Loader2 className="w-4 h-4 animate-spin" />
-                <span>Procesando y cruzando Archivos A y B en la Nube...</span>
+                <span>Procesando archivo en la Nube...</span>
               </>
             ) : (
               <>
@@ -493,7 +466,7 @@ export const TabIngestion: React.FC<TabIngestionProps> = ({ onMissionSelected })
                 >
                   <div className="space-y-2">
                     <div className="flex items-start justify-between gap-2">
-                      <div>
+                      <div className="flex-1">
                         <div className="flex items-center gap-1.5 flex-wrap">
                           <span className="text-[10px] uppercase font-bold tracking-wider bg-slate-800 text-slate-300 px-2 py-0.5 rounded border border-slate-700">
                             {DEPOSIT_NAMES[mission.DepositCode as DepositCode] || `Depósito ${mission.DepositCode}`}
@@ -505,11 +478,19 @@ export const TabIngestion: React.FC<TabIngestionProps> = ({ onMissionSelected })
                             </span>
                           )}
                         </div>
-
                         <h4 className="text-base font-bold text-white mt-1.5 leading-snug">
                           {mission.Name || mission.MissionName || 'Auditoría General'}
                         </h4>
                       </div>
+                      
+                      {/* Botón Eliminar conservado */}
+                      <button 
+                        onClick={(e) => handleDeleteMission(mission.MissionId, e)}
+                        className="p-2 bg-rose-950/30 text-rose-500 hover:bg-rose-500 hover:text-white rounded-lg transition shrink-0"
+                        title="Eliminar misión permanentemente"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
                     </div>
 
                     <div className="text-[11px] text-slate-400 space-y-0.5">

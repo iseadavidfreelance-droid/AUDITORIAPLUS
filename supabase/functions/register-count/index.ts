@@ -54,22 +54,32 @@ Deno.serve(async (req) => {
     };
 
     const { data, error } = await supabaseClient.from('EventStore').insert(payloadToInsert).select();
-    if (error) throw new Error(error.message);
+    if (error) throw new Error("Error Evento Principal: " + error.message);
 
     if (calculated_discrepancy !== 0) {
       const { error: discError } = await supabaseClient
         .from('EventStore')
         .insert({
           AggregateId: task_id,
-          AggregateType: 'CrossDiscrepancy', // Nuevo tipo agnóstico
+          AggregateType: 'CrossDiscrepancy',
           EventType: 'DiscrepancyDetected',
           UserId: user_id,
           CorrelationId: crypto.randomUUID(),
-          discrepancy_id: crypto.randomUUID(),
+          // ESTRUCTURA CORREGIDA: Todo va dentro de Payload
+          Payload: {
+            discrepancy_id: crypto.randomUUID(),
+            mission_id: mission_id,
+            origin_deposit: deposit_code,
+            target_deposit: target_deposit,
+            sku_code: sku_code,
+            sku_description: "SKU " + sku_code,
+            origin_discrepancy: calculated_discrepancy,
+            status: "PENDING_TARGET_COUNT"
+          },
           Metadata: { trigger: "auto_discrepancy" }
         });
         
-        if (discError) throw new Error(discError.message);
+        if (discError) throw new Error("Error Evento Discrepancia: " + discError.message);
     }
 
     return new Response(

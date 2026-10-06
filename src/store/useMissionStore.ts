@@ -27,6 +27,11 @@ export interface MissionState {
   activeMission?: MissionMetrics | null;
   searchTerm: string;
 
+  // --- NUEVAS VARIABLES FASE 2: ENRIQUECEDOR API ---
+  isEnriching: boolean;
+  enrichProgress: { current: number; total: number };
+  runMissionEnrichment: (missionId: string, depositCode: string) => Promise<void>;
+
   // 2. Métodos e Indexación requeridos
   setActiveTaskBySku: (query: string) => MissionTask | null;
   fetchMissionTasks: (missionId: string) => Promise<MissionTask[]>;
@@ -117,12 +122,108 @@ export const useMissionStore = create<MissionState>((set, get) => ({
   activeMission: null,
   searchTerm: '',
 
+  // --- ESTADOS INICIALES FASE 2 ---
+  isEnriching: false,
+  enrichProgress: { current: 0, total: 0 },
+
+  // --- MOTOR ENRIQUECEDOR (COMPONENTE A) ---
+  runMissionEnrichment: async (missionId: string, depositCode: string) => {
+    set({ isEnriching: true, enrichProgress: { current: 0, total: 0 } });
+    
+    try {
+      const { data: tasksToEnrich, error } = await supabase
+        .from('Read_Mission_Tasks')
+        .select('*')
+        .eq('MissionId', missionId);
+
+      if (error || !tasksToEnrich) throw error;
+
+      set({ enrichProgress: { current: 0, total: tasksToEnrich.length } });
+      let currentVal = 0;
+
+      for (const task of tasksToEnrich) {
+        try {
+          const sku = task.SkuCode;
+          const res = await fetch(`http://192.168.15.225:3002/api/inventory?search=${sku}`);
+          
+          if (res.ok) {
+            const json = await res.json();
+
+            if (json.success && json.data && json.data.length > 0) {
+              const apiItem = json.data.find((d: any) => d.codigo_deposito === depositCode) || json.data[0];
+
+              const precioFinalAPI = apiItem.precio_final || 0;
+              const precioRedondeado = Number(Number(precioFinalAPI).toFixed(2));
+              
+              let extractedBarcodes: string[] = [];
+              
+              if (Array.isArray(apiItem.codigos_barras)) {
+                extractedBarcodes = [...extractedBarcodes, ...apiItem.codigos_barras];
+              } else if (typeof apiItem.codigos_barras === 'string') {
+                extractedBarcodes = [...extractedBarcodes, ...apiItem.codigos_barras.split(',')];
+              }
+
+              const possibleKeys = ['codigo_barras', 'codigo_barra', 'cod_barras', 'barcode', 'ean', 'upc'];
+              possibleKeys.forEach(key => {
+                if (apiItem[key]) {
+                  if (typeof apiItem[key] === 'string') {
+                    extractedBarcodes = [...extractedBarcodes, ...apiItem[key].split(',')];
+                  } else if (Array.isArray(apiItem[key])) {
+                    extractedBarcodes = [...extractedBarcodes, ...apiItem[key]];
+                  }
+                }
+              });
+
+              if (apiItem.product_code) extractedBarcodes.push(String(apiItem.product_code));
+              if (sku) extractedBarcodes.push(String(sku));
+
+              const cleanBarcodes = Array.from(
+                new Set(
+                  extractedBarcodes
+                    .map(b => String(b).trim())
+                    .filter(b => b !== '' && b !== 'null' && b !== 'undefined')
+                )
+              );
+
+              // 🛡️ BLINDAJE CONTRA EL "SILENT DROP" DE SUPABASE
+              // Garantizamos que nunca enviemos un arreglo vacío y lo convertimos a string JSON puro
+              const barcodesPayload = cleanBarcodes.length > 0 ? cleanBarcodes : [sku];
+
+              const { error: updateErr } = await supabase
+                .from('Read_Mission_Tasks')
+                .update({
+                  Cost: precioRedondeado,
+                  Barcodes: JSON.stringify(barcodesPayload) // <--- TRUCO MAGISTRAL AQUÍ
+                })
+                .eq('TaskId', task.TaskId);
+
+              if (updateErr) {
+                console.error(`[Supabase] Error guardando SKU ${sku}:`, updateErr);
+              } else {
+                console.log(`[Éxito] SKU ${sku} guardado. Costo: $${precioRedondeado} | Barras:`, barcodesPayload);
+              }
+            }
+          }
+        } catch (err) {
+          console.warn(`[API] Error enriqueciendo SKU ${task.SkuCode}:`, err);
+        }
+
+        currentVal++;
+        set({ enrichProgress: { current: currentVal, total: tasksToEnrich.length } });
+        await new Promise(resolve => setTimeout(resolve, 400));
+      }
+
+      get().fetchMissionTasks(missionId);
+
+    } catch (error) {
+      console.error("Fallo general en el enriquecimiento:", error);
+    } finally {
+      set({ isEnriching: false });
+    }
+  },
+
   /**
    * 2. setActiveTaskBySku(query: string)
-   * - Regla LPAD: Si `query` es numérico corto (entre 1 y 5 dígitos, ej: ^\d{1,5}$),
-   *   rellena automáticamente con ceros a la izquierda hasta 6 dígitos (ej: '123' -> '000123').
-   * - Búsqueda estricta: Coincidencia exacta primero por `SkuCode` y luego en el arreglo `barcodes`.
-   * - Asigna la tarea encontrada a `activeTask`.
    */
   setActiveTaskBySku: (query: string): MissionTask | null => {
     if (!query || !query.trim()) {
@@ -131,19 +232,16 @@ export const useMissionStore = create<MissionState>((set, get) => ({
     }
 
     const trimmed = query.trim();
-    // Regla LPAD a 6 dígitos si es numérico corto (1 a 5 dígitos)
     const isShortNumeric = /^\d{1,5}$/.test(trimmed);
     const normalizedSku = isShortNumeric ? trimmed.padStart(6, '0') : trimmed;
 
     const { tasks } = get();
 
-    // 1. Búsqueda exacta primero por SkuCode (con query normalizado o crudo)
     let foundTask = tasks.find((task) => {
       const code = (task.SkuCode || task.skuCode || '').trim();
       return code === normalizedSku || code === trimmed;
     });
 
-    // 2. Si no se encontró por SkuCode, buscar en el arreglo Barcodes
     if (!foundTask) {
       foundTask = tasks.find((task) => {
         const barcodes = task.Barcodes || task.barcodes || [];
@@ -165,9 +263,6 @@ export const useMissionStore = create<MissionState>((set, get) => ({
 
   /**
    * 3. fetchMissionTasks(missionId: string)
-   * - Carga desde Supabase (Read_Mission_Tasks) las tareas de la misión activa.
-   * - Si está offline o falla la red, recurre a IndexedDB (AuditDB / missions_cache).
-   * - Recalcula métricas en tiempo real y actualiza estado.
    */
   fetchMissionTasks: async (missionId: string): Promise<MissionTask[]> => {
     if (!missionId) return [];
@@ -177,7 +272,6 @@ export const useMissionStore = create<MissionState>((set, get) => ({
     try {
       let loadedTasks: MissionTask[] = [];
 
-      // Intento de lectura desde Supabase si está disponible y configurado
       if (get().isOnline && isSupabaseConfigured) {
         const { data, error } = await supabase
           .from('Read_Mission_Tasks')
@@ -186,7 +280,7 @@ export const useMissionStore = create<MissionState>((set, get) => ({
           .order('SkuCode', { ascending: true });
 
         if (error) {
-          console.warn('[useMissionStore] Error al consultar Read_Mission_Tasks de Supabase:', error);
+          console.warn('[useMissionStore] Error al consultar Read_Mission_Tasks:', error);
           throw error;
         }
 
@@ -222,7 +316,6 @@ export const useMissionStore = create<MissionState>((set, get) => ({
               Status: (row.Status || row.status || 'PENDING') as TaskStatus,
               CreatedAt: row.CreatedAt || row.createdAt || new Date().toISOString(),
               UpdatedAt: row.UpdatedAt || row.updatedAt || new Date().toISOString(),
-              // Mapeo camelCase
               taskId: row.TaskId || row.taskId,
               missionId: row.MissionId || row.missionId || missionId,
               depositCode: row.DepositCode || row.depositCode || '150101',
@@ -238,7 +331,6 @@ export const useMissionStore = create<MissionState>((set, get) => ({
             };
           });
 
-          // Guardar en caché local IndexedDB para acceso sin conexión
           const calculatedMetrics = calculateMetricsFromTasks(loadedTasks, missionId);
           await cacheMissionData(missionId, {
             metrics: calculatedMetrics,
@@ -248,14 +340,12 @@ export const useMissionStore = create<MissionState>((set, get) => ({
           });
         }
       } else {
-        // Modo Offline: recuperar desde caché local IndexedDB
         const cached = await getCachedMissionData(missionId);
         if (cached && cached.tasks) {
           loadedTasks = cached.tasks;
         }
       }
 
-      // Recalcular métricas consolidadas
       const newMetrics = calculateMetricsFromTasks(loadedTasks, missionId);
 
       set({
@@ -272,7 +362,6 @@ export const useMissionStore = create<MissionState>((set, get) => ({
       return loadedTasks;
     } catch (err) {
       console.warn('[useMissionStore] Fallback a caché IndexedDB por error:', err);
-      // Fallback a caché local ante error de red
       const cached = await getCachedMissionData(missionId).catch(() => null);
       if (cached && cached.tasks) {
         const fallbackMetrics = calculateMetricsFromTasks(cached.tasks, missionId);
@@ -295,10 +384,6 @@ export const useMissionStore = create<MissionState>((set, get) => ({
 
   /**
    * 4. updateTaskCountLocally(skuCode, countedQty, salesQty)
-   * - Actualiza localmente el estado de la tarea en caliente mientras se confirma en backend.
-   * - Aplica la ecuación: Discrepancy = CountedQuantity - (SystemQuantity - SalesDuringAudit).
-   * - Asigna estado: COMPLETED_MATCH si discrepancy === 0, sino DISCREPANT.
-   * - Recalcula métricas: totalSkus, countedSkus, pendingSkus, discrepantSkus, reconciledSkus.
    */
   updateTaskCountLocally: (
     skuCode: string,
@@ -357,7 +442,6 @@ export const useMissionStore = create<MissionState>((set, get) => ({
         return updated;
       });
 
-      // Recalcular métricas
       const newMetrics = calculateMetricsFromTasks(updatedTasks, state.activeMissionId);
 
       return {
@@ -377,7 +461,6 @@ export const useMissionStore = create<MissionState>((set, get) => ({
     });
   },
 
-  // Acciones adicionales de conveniencia
   setActiveMissionId: (missionId) => set({ activeMissionId: missionId }),
 
   setActiveMission: (mission) =>
@@ -411,10 +494,7 @@ export const useMissionStore = create<MissionState>((set, get) => ({
   },
 
   setMetrics: (metrics) => set({ metrics }),
-
   setIsOnline: (isOnline) => set({ isOnline }),
-
   setSearchTerm: (term) => set({ searchTerm: term }),
-
   clearActiveTask: () => set({ activeTask: null, searchTerm: '' }),
 }));
