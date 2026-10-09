@@ -205,8 +205,7 @@ export const TabReports: React.FC = () => {
             ${tasks.map((t) => `
               <tr>
                 <td><strong>${t.SkuCode}</strong></td>
-                <td>${t.SkuDescription}</td>
-                <td>$${Number(t.Cost || 0).toFixed(2)}</td>
+                <td>${t.SkuDescription}</td>                 <td>$${Number(t.Cost || 0).toFixed(2)}</td>
                 <td>${Number(t.SystemQuantity || 0).toFixed(2)}</td>
                 <td>${Number(t.SalesDuringAudit || 0).toFixed(2)}</td>
                 <td>${t.CountedQuantity !== null ? Number(t.CountedQuantity).toFixed(2) : '-'}</td>
@@ -238,6 +237,11 @@ export const TabReports: React.FC = () => {
     setToast({ text, type });
     setTimeout(() => setToast(null), 4000);
   };
+
+  // AISLAMIENTO: Filtramos los traslados para solo mostrar los confirmados.
+  const executedTransfers = virtualTransfers.filter(
+    (vt) => vt.Status === 'EXECUTED' || (vt as any).status === 'EXECUTED'
+  );
 
   return (
     <div className="space-y-5 max-w-5xl mx-auto w-full">
@@ -385,7 +389,7 @@ export const TabReports: React.FC = () => {
           <div className="flex items-center gap-2">
             <ShieldCheck className="w-5 h-5 text-emerald-400" />
             <h3 className="text-sm sm:text-base font-black text-white uppercase tracking-wider">
-              Traslados Virtuales Registrados ({virtualTransfers.length})
+              Traslados Virtuales Registrados ({executedTransfers.length})
             </h3>
           </div>
           <span className="text-xs text-slate-400 font-mono">
@@ -393,13 +397,13 @@ export const TabReports: React.FC = () => {
           </span>
         </div>
 
-        {virtualTransfers.length === 0 ? (
+        {executedTransfers.length === 0 ? (
           <div className="bg-slate-900/60 border border-dashed border-slate-700 rounded-xl p-6 text-center text-slate-400">
             <p className="text-sm font-semibold text-slate-300">
-              No hay traslados virtuales registrados para esta misión
+              No hay traslados virtuales confirmados para esta misión
             </p>
             <p className="text-xs text-slate-500 mt-1">
-              Los traslados se generan automáticamente cuando un faltante de almacén se compensa en Piso de Venta (150103).
+              Los traslados se muestran aquí una vez son confirmados manualmente.
             </p>
           </div>
         ) : (
@@ -415,13 +419,13 @@ export const TabReports: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-700/60 font-mono">
-                {virtualTransfers.map((vt) => (
-                  <tr key={vt.TransferId || vt.transferId} className="hover:bg-slate-700/30 transition">
+                {executedTransfers.map((vt) => (
+                  <tr key={vt.TransferId || (vt as any).transferId} className="hover:bg-slate-700/30 transition">
                     <td className="py-3 px-3 font-bold text-emerald-400">
-                      {vt.SkuCode || vt.skuCode}
+                      {vt.SkuCode || (vt as any).skuCode}
                     </td>
                     <td className="py-3 px-3 font-sans text-slate-200 max-w-xs truncate">
-                      {vt.SkuDescription || vt.skuDescription || 'Artículo auditado'}
+                      {vt.SkuDescription || (vt as any).skuDescription || 'Artículo auditado'}
                     </td>
                     <td className="py-3 px-3 text-center">
                       <span className="inline-flex items-center gap-1.5 text-xs text-slate-300 bg-slate-900 px-2.5 py-1 rounded-lg border border-slate-700">
@@ -431,7 +435,7 @@ export const TabReports: React.FC = () => {
                       </span>
                     </td>
                     <td className="py-3 px-3 text-right font-black text-emerald-300">
-                      +{Number(vt.TransferredQuantity || vt.TransferQuantity || 0).toFixed(2)} u
+                      +{Number((vt as any).TransferredQuantity || (vt as any).TransferQuantity || 0).toFixed(2)} u
                     </td>
                     <td className="py-3 px-3 text-right text-slate-400 text-xs">
                       {new Date(vt.CreatedAt || Date.now()).toLocaleTimeString()}

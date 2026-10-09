@@ -117,7 +117,7 @@ export const TabFloorReconciliation: React.FC = () => {
     setIsFetchingLive(true);
 
     try {
-      const res = await fetch(`http://192.168.15.225:3002/api/inventory?search=${disc.skuCode}`);
+      const res = await fetch(`https://192.168.15.225:3002/api/inventory?search=${disc.skuCode}`);
       if (res.ok) {
         const json = await res.json();
         if (json.success && json.data) {
@@ -227,23 +227,39 @@ export const TabFloorReconciliation: React.FC = () => {
 
   // --- CONFIRMACIÓN HUMANA DEL TRASLADO ---
   const handleApproveTransfer = async (transfer: any) => {
-    const isConfirmed = window.confirm(`¿ESTÁS SEGURO QUE ESTE TRASLADO SE REALIZÓ EN EL ERP?\n\nSKU: ${transfer.SkuCode}\nCantidad: ${transfer.TransferQuantity || transfer.TransferredQuantity} u\nDe: ${transfer.FromDeposit || transfer.OriginDeposit} -> A: ${transfer.ToDeposit || transfer.DestinationDeposit}`);
+    const transferQty = transfer.TransferQuantity || transfer.TransferredQuantity || transfer.transferredQuantity;
+    const isConfirmed = window.confirm(`¿ESTÁS SEGURO QUE ESTE TRASLADO SE REALIZÓ EN EL ERP?\n\nSKU: ${transfer.SkuCode || transfer.skuCode}\nCantidad: ${transferQty} u\nDe: ${transfer.FromDeposit || transfer.OriginDeposit} -> A: ${transfer.ToDeposit || transfer.DestinationDeposit}`);
     
     if (!isConfirmed) return;
 
     try {
-      await supabase.functions.invoke('confirm-transfer', {
+      // 1. ACTUALIZACIÓN OPTIMISTA: Lo quitamos visualmente de la lista al instante
+      const transferIdToConfirm = transfer.TransferId || transfer.transferId;
+      setVirtualTransfers(virtualTransfers.filter(t => (t.TransferId || t.transferId) !== transferIdToConfirm));
+
+      // 2. Disparamos a la API (Si falla, el catch lo atrapa)
+      const { error } = await supabase.functions.invoke('confirm-transfer', {
         body: {
-          transfer_id: transfer.TransferId || transfer.transferId,
+          transfer_id: transferIdToConfirm,
           mission_id: transfer.MissionId || transfer.missionId,
           sku_code: transfer.SkuCode || transfer.skuCode,
           user_id: user?.id
         }
       });
+
+      if (error) throw new Error(error.message);
+
       showToast('Traslado confirmado exitosamente.', 'success');
-      await fetchOpenDiscrepancies(); 
+      
+      // 3. Retrasamos el fetch 1.5 segundos para dar tiempo al trigger de BD (CQRS) de actualizar
+      setTimeout(() => {
+        fetchOpenDiscrepancies();
+      }, 1500);
+
     } catch (err) {
-      showToast('Error al confirmar el traslado.', 'error');
+      showToast('Error al confirmar el traslado. Verifica la conexión.', 'error');
+      // Si falló, refrescamos para volver a mostrar el item en la lista
+      fetchOpenDiscrepancies();
     }
   };
 
@@ -257,6 +273,11 @@ export const TabFloorReconciliation: React.FC = () => {
     if (!q) return true;
     return (d.skuCode || '').toLowerCase().includes(q) || (d.skuDescription || '').toLowerCase().includes(q);
   });
+
+  // Filtramos la lista de sugeridos explícitamente para evitar mostrar los confirmados
+  const pendingSuggestedTransfers = virtualTransfers.filter(
+    (tr: any) => tr.Status === 'SUGGESTED' || tr.status === 'SUGGESTED'
+  );
 
   return (
     <div className="space-y-5 max-w-4xl mx-auto w-full pb-8">
@@ -406,13 +427,13 @@ export const TabFloorReconciliation: React.FC = () => {
       {/* NUEVA TABLA: TRASLADOS SUGERIDOS PARA APROBACIÓN MANUAL */}
       <div className="space-y-3 pt-6 border-t border-slate-800">
         <h3 className="text-xs font-black text-blue-400 uppercase tracking-widest flex items-center gap-2">
-          <ArrowRightLeft className="w-4 h-4" /> TRASLADOS PENDIENTES DE CONFIRMACIÓN ({virtualTransfers.length})
+          <ArrowRightLeft className="w-4 h-4" /> TRASLADOS PENDIENTES DE CONFIRMACIÓN ({pendingSuggestedTransfers.length})
         </h3>
         
-        {virtualTransfers.length === 0 ? (
+        {pendingSuggestedTransfers.length === 0 ? (
           <div className="p-6 bg-slate-800/30 border border-slate-700/50 rounded-xl text-center text-slate-500 text-sm">No hay movimientos sugeridos esperando confirmación.</div>
         ) : (
-          virtualTransfers.map((tr: any) => (
+          pendingSuggestedTransfers.map((tr: any) => (
             <div key={tr.TransferId || tr.transferId} className="bg-blue-950/20 border border-blue-900/50 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div>
                 <span className="text-[10px] font-black bg-blue-900/50 text-blue-300 px-2 py-0.5 rounded">MOVIMIENTO SUGERIDO PARA CUADRAR</span>

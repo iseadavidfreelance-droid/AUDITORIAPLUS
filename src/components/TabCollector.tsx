@@ -140,7 +140,7 @@ export const TabCollector: React.FC<TabCollectorProps> = ({ onNavigateToFloor })
         // --- INICIO INTERCEPTOR EN VIVO (FASE 2) ---
         setIsLiveFetching(true);
         try {
-          const res = await fetch(`http://192.168.15.225:3002/api/inventory?search=${normalizedSku}`);
+          const res = await fetch(`https://192.168.15.225:3002/api/inventory?search=${normalizedSku}`);
           
           if (res.ok) {
             const json = await res.json();

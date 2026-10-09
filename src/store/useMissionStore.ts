@@ -144,7 +144,7 @@ export const useMissionStore = create<MissionState>((set, get) => ({
       for (const task of tasksToEnrich) {
         try {
           const sku = task.SkuCode;
-          const res = await fetch(`http://192.168.15.225:3002/api/inventory?search=${sku}`);
+          const res = await fetch(`https://192.168.15.225:3002/api/inventory?search=${sku}`);
           
           if (res.ok) {
             const json = await res.json();

@@ -14,7 +14,7 @@ if sys.platform == "win32":
     except Exception:
         pass
 
-API_ENDPOINT = "http://192.168.15.225:3002/api/inventory"
+API_ENDPOINT = "https://192.168.15.225:3002/api/inventory"
 
 # Lista completa de los 77 SKUs Reales
 REAL_SKUS = [
