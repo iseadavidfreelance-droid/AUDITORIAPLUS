@@ -158,6 +158,7 @@ export const TabReports: React.FC = () => {
           .badge { padding: 2px 6px; border-radius: 4px; font-weight: bold; font-size: 10px; }
           .badge-match { background: #D1FAE5; color: #065F46; }
           .badge-disc { background: #FEE2E2; color: #991B1B; }
+          .badge-partial { background: #DBEAFE; color: #1E3A8A; }
         </style>
       </head>
       <body>
@@ -202,23 +203,30 @@ export const TabReports: React.FC = () => {
             </tr>
           </thead>
           <tbody>
-            ${tasks.map((t) => `
+            ${tasks.map((t) => {
+              const disc = Number(t.Discrepancy ?? 0);
+              let displayStatus = t.Status;
+              if (t.Status === 'RECONCILED') displayStatus = 'TRASLADADO';
+              if (t.Status === 'PARTIALLY_RECONCILED') displayStatus = 'TRASLADO PARCIAL';
+
+              return `
               <tr>
                 <td><strong>${t.SkuCode}</strong></td>
                 <td>${t.SkuDescription}</td>                 <td>$${Number(t.Cost || 0).toFixed(2)}</td>
                 <td>${Number(t.SystemQuantity || 0).toFixed(2)}</td>
                 <td>${Number(t.SalesDuringAudit || 0).toFixed(2)}</td>
-                <td>${t.CountedQuantity !== null ? Number(t.CountedQuantity).toFixed(2) : '-'}</td>
-                <td style="font-weight:bold; color: ${Number(t.Discrepancy || 0) === 0 ? '#059669' : '#DC2626'}">
-                  ${Number(t.Discrepancy || 0) > 0 ? `+${Number(t.Discrepancy).toFixed(2)}` : Number(t.Discrepancy || 0).toFixed(2)}
+                <td>${t.CountedQuantity !== null && t.CountedQuantity !== undefined ? Number(t.CountedQuantity).toFixed(2) : '-'}</td>
+                <td style="font-weight:bold; color: ${disc === 0 ? '#059669' : disc < 0 ? '#DC2626' : '#D97706'}">
+                  ${disc === 0 ? '0.00' : disc > 0 ? `+${disc.toFixed(2)}` : disc.toFixed(2)}
                 </td>
                 <td>
-                  <span class="badge ${t.Status === 'COMPLETED_MATCH' || t.Status === 'RECONCILED' ? 'badge-match' : 'badge-disc'}">
-                    ${t.Status}
+                  <span class="badge ${displayStatus === 'COMPLETED_MATCH' || displayStatus === 'TRASLADADO' ? 'badge-match' : displayStatus === 'TRASLADO PARCIAL' ? 'badge-partial' : 'badge-disc'}">
+                    ${displayStatus}
                   </span>
                 </td>
               </tr>
-            `).join('')}
+              `;
+            }).join('')}
           </tbody>
         </table>
         <script>
@@ -240,7 +248,7 @@ export const TabReports: React.FC = () => {
 
   // AISLAMIENTO: Filtramos los traslados para solo mostrar los confirmados.
   const executedTransfers = virtualTransfers.filter(
-    (vt) => vt.Status === 'EXECUTED' || (vt as any).status === 'EXECUTED'
+    (vt) => vt.Status === 'COMPLETED' || (vt as any).status === 'COMPLETED'
   );
 
   return (
@@ -479,8 +487,14 @@ export const TabReports: React.FC = () => {
               </thead>
               <tbody className="divide-y divide-slate-700/50 bg-slate-900/40">
                 {tasks.map((task) => {
+                  // Tomamos la verdad absoluta directo de la BD
                   const disc = Number(task.Discrepancy ?? 0);
                   const isCounted = task.CountedQuantity !== null && task.CountedQuantity !== undefined;
+
+                  // Traducimos el estatus de la base de datos para la gerencia
+                  let displayStatus = task.Status;
+                  if (task.Status === 'RECONCILED') displayStatus = 'TRASLADADO';
+                  if (task.Status === 'PARTIALLY_RECONCILED') displayStatus = 'TRASLADO PARCIAL';
 
                   return (
                     <tr key={task.TaskId || task.taskId} className="hover:bg-slate-800/60">
@@ -506,20 +520,20 @@ export const TabReports: React.FC = () => {
                               : 'text-amber-400'
                           }
                         >
-                          {disc > 0 ? `+${disc.toFixed(2)}` : disc.toFixed(2)}
+                          {disc === 0 ? '0.00' : disc > 0 ? `+${disc.toFixed(2)}` : disc.toFixed(2)}
                         </span>
                       </td>
                       <td className="py-2 px-3 text-center">
                         <span
                           className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                            task.Status === 'COMPLETED_MATCH' || task.Status === 'RECONCILED'
+                            displayStatus === 'COMPLETED_MATCH' || displayStatus === 'TRASLADADO'
                               ? 'bg-emerald-950 text-emerald-400 border border-emerald-800'
-                              : task.Status === 'DISCREPANT'
-                              ? 'bg-amber-950 text-amber-400 border border-amber-800'
-                              : 'bg-slate-800 text-slate-400 border border-slate-700'
+                              : displayStatus === 'TRASLADO PARCIAL'
+                              ? 'bg-blue-950 text-blue-400 border border-blue-800'
+                              : 'bg-amber-950 text-amber-400 border border-amber-800'
                           }`}
                         >
-                          {task.Status}
+                          {displayStatus}
                         </span>
                       </td>
                     </tr>
